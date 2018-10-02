@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jedib0t/go-pretty/progress"
+	"github.com/admpub/go-pretty/progress"
 )
 
 var (

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jedib0t/go-pretty/text"
+	"github.com/admpub/go-pretty/text"
 )
 
 // Render renders the Progress tracker and handles all existing trackers and

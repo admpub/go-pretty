@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jedib0t/go-pretty/list"
-	"github.com/jedib0t/go-pretty/progress"
-	"github.com/jedib0t/go-pretty/table"
-	"github.com/jedib0t/go-pretty/text"
+	"github.com/admpub/go-pretty/list"
+	"github.com/admpub/go-pretty/progress"
+	"github.com/admpub/go-pretty/table"
+	"github.com/admpub/go-pretty/text"
 )
 
 var (

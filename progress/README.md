@@ -1,5 +1,5 @@
 # Progress
-[![GoDoc](https://godoc.org/github.com/jedib0t/go-pretty/progress?status.svg)](https://godoc.org/github.com/jedib0t/go-pretty/progress)
+[![GoDoc](https://godoc.org/github.com/admpub/go-pretty/progress?status.svg)](https://godoc.org/github.com/admpub/go-pretty/progress)
 
 Track the Progress of one or more Tasks (like downloading multiple files in
 parallel).

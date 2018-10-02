@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/jedib0t/go-pretty/progress"
+	"github.com/admpub/go-pretty/progress"
 	"github.com/pkg/profile"
 )
 

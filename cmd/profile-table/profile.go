@@ -5,8 +5,8 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/jedib0t/go-pretty/table"
-	"github.com/jedib0t/go-pretty/text"
+	"github.com/admpub/go-pretty/table"
+	"github.com/admpub/go-pretty/text"
 	"github.com/pkg/profile"
 )
 

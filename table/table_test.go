@@ -5,7 +5,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/jedib0t/go-pretty/text"
+	"github.com/admpub/go-pretty/text"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -1,5 +1,5 @@
 ## List
-[![GoDoc](https://godoc.org/github.com/jedib0t/go-pretty/list?status.svg)](https://godoc.org/github.com/jedib0t/go-pretty/list)
+[![GoDoc](https://godoc.org/github.com/admpub/go-pretty/list?status.svg)](https://godoc.org/github.com/admpub/go-pretty/list)
 
 Pretty-print lists with multiple levels/indents into ASCII/Unicode strings.
 
