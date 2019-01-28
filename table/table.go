@@ -246,7 +246,7 @@ func (t *Table) analyzeAndStringify(row Row, isHeader bool, isFooter bool) rowSt
 	rowOut := make(rowStr, len(row))
 	for colIdx, col := range row {
 		// if the column is not a number, keep track of it
-		if !isHeader && !isFooter && !t.columnIsNonNumeric[colIdx] && !IsNumber(col) {
+		if !isHeader && !isFooter && !t.columnIsNonNumeric[colIdx] && !isNumber(col) {
 			t.columnIsNonNumeric[colIdx] = true
 		}
 
@@ -259,6 +259,9 @@ func (t *Table) analyzeAndStringify(row Row, isHeader bool, isFooter bool) rowSt
 		}
 		if strings.Contains(colStr, "\t") {
 			colStr = strings.Replace(colStr, "\t", "    ", -1)
+		}
+		if strings.Contains(colStr, "\r") {
+			colStr = strings.Replace(colStr, "\r", "", -1)
 		}
 		rowOut[colIdx] = colStr
 	}
@@ -299,17 +302,6 @@ func (t *Table) getAutoIndexColumnIDs() rowStr {
 	return row
 }
 
-func (t *Table) getColors(hint renderHint) []text.Colors {
-	if hint.isSeparatorRow {
-		return nil
-	} else if hint.isHeaderRow {
-		return t.colorsHeader
-	} else if hint.isFooterRow {
-		return t.colorsFooter
-	}
-	return t.colors
-}
-
 func (t *Table) getFormat(hint renderHint) text.Format {
 	if hint.isSeparatorRow {
 		return text.FormatDefault
@@ -319,6 +311,17 @@ func (t *Table) getFormat(hint renderHint) text.Format {
 		return t.style.Format.Footer
 	}
 	return t.style.Format.Row
+}
+
+func (t *Table) getRowColors(hint renderHint) []text.Colors {
+	if hint.isSeparatorRow {
+		return nil
+	} else if hint.isHeaderRow {
+		return t.colorsHeader
+	} else if hint.isFooterRow {
+		return t.colorsFooter
+	}
+	return t.colors
 }
 
 func (t *Table) getRowsSorted() []rowStr {
@@ -332,6 +335,28 @@ func (t *Table) getRowsSorted() []rowStr {
 		sortedRows[idx] = t.rows[sortedRowIndices[idx]]
 	}
 	return sortedRows
+}
+
+func (t *Table) getBorderColors(hint renderHint) text.Colors {
+	if hint.isFooterRow {
+		return t.style.Color.Footer
+	} else if t.autoIndex {
+		return t.style.Color.IndexColumn
+	}
+	return t.style.Color.Header
+}
+
+func (t *Table) getSeparatorColors(hint renderHint) text.Colors {
+	if hint.isHeaderRow {
+		return t.style.Color.Header
+	} else if hint.isFooterRow {
+		return t.style.Color.Footer
+	} else if hint.isAutoIndexColumn {
+		return t.style.Color.IndexColumn
+	} else if hint.rowNumber > 0 && hint.rowNumber%2 == 0 {
+		return t.style.Color.RowAlternate
+	}
+	return t.style.Color.Row
 }
 
 func (t *Table) getVAlign(colIdx int, hint renderHint) text.VAlign {
@@ -371,7 +396,7 @@ func (t *Table) initForRenderMaxColumnLength() {
 	var findMaxColumnLengths = func(rows []rowStr) {
 		for _, row := range rows {
 			for colIdx, colStr := range row {
-				longestLineLen := text.GetLongestLineLength(colStr)
+				longestLineLen := text.LongestLineLen(colStr)
 				if longestLineLen > t.maxColumnLengths[colIdx] {
 					t.maxColumnLengths[colIdx] = longestLineLen
 				}

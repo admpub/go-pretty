@@ -80,6 +80,15 @@ func (t *Tracker) Reset() {
 	t.value = 0
 }
 
+// SetValue sets the value of the tracker and re-calculates if the tracker is
+// "done".
+func (t *Tracker) SetValue(value int64) {
+	t.done = false
+	t.timeStop = time.Time{}
+	t.value = 0
+	t.Increment(value)
+}
+
 func (t *Tracker) start() {
 	t.done = false
 	t.timeStart = time.Now()
