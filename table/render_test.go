@@ -19,8 +19,12 @@ func TestTable_Render(t *testing.T) {
 	tw.SetAlign(testAlign)
 	tw.SetCaption(testCaption)
 	tw.SetStyle(styleTest)
+	tw.SetTitle(testTitle2)
 
-	expectedOut := `(-----^------------^-----------^--------^-----------------------------)
+	expectedOut := `(---------------------------------------------------------------------)
+[<When you play the Game of Thrones, you win or you die. There is no >]
+[<middle ground.                                                     >]
+{-----^------------^-----------^--------^-----------------------------}
 [<  #>|<FIRST NAME>|<LAST NAME>|<SALARY>|<                           >]
 {-----+------------+-----------+--------+-----------------------------}
 [<  1>|<Arya      >|<Stark    >|<  3000>|<                           >]
@@ -32,7 +36,8 @@ func TestTable_Render(t *testing.T) {
 {-----+------------+-----------+--------+-----------------------------}
 [<   >|<          >|<TOTAL    >|< 10000>|<                           >]
 \-----v------------v-----------v--------v-----------------------------/
-test-caption`
+A Song of Ice and Fire`
+	fmt.Println(tw.Render())
 	assert.Equal(t, expectedOut, tw.Render())
 }
 
@@ -241,7 +246,7 @@ func TestTable_Render_ColoredCustom(t *testing.T) {
 		"├─────┼────────────┼───────────┼────────┼─────────────────────────────┤",
 		"│     │            │\x1b[94;1m TOTAL     \x1b[0m│\x1b[94;1m  10000 \x1b[0m│                             │",
 		"╰─────┴────────────┴───────────┴────────┴─────────────────────────────╯",
-		"test-caption",
+		"A Song of Ice and Fire",
 	}
 	assert.Equal(t, strings.Join(expectedOut, "\n"), tw.Render())
 }
@@ -326,8 +331,11 @@ func TestTable_Render_ColoredStyleAutoIndex(t *testing.T) {
 	table.AppendFooter(testFooter)
 	table.SetAutoIndex(true)
 	table.SetStyle(StyleColoredDark)
+	table.SetTitle(testTitle2)
 
 	expectedOut := strings.Join([]string{
+		"\x1b[106;30;1m When you play the Game of Thrones, you win or you die. There is no \x1b[0m",
+		"\x1b[106;30;1m middle ground.                                                     \x1b[0m",
 		"\x1b[96;100m   \x1b[0m\x1b[96;100m   # \x1b[0m\x1b[96;100m FIRST NAME \x1b[0m\x1b[96;100m LAST NAME \x1b[0m\x1b[96;100m SALARY \x1b[0m\x1b[96;100m                             \x1b[0m",
 		"\x1b[96;100m 1 \x1b[0m\x1b[97;40m   1 \x1b[0m\x1b[97;40m Arya       \x1b[0m\x1b[97;40m Stark     \x1b[0m\x1b[97;40m   3000 \x1b[0m\x1b[97;40m                             \x1b[0m",
 		"\x1b[96;100m 2 \x1b[0m\x1b[37;40m  20 \x1b[0m\x1b[37;40m Jon        \x1b[0m\x1b[37;40m Snow      \x1b[0m\x1b[37;40m   2000 \x1b[0m\x1b[37;40m You know nothing, Jon Snow! \x1b[0m",
@@ -335,6 +343,7 @@ func TestTable_Render_ColoredStyleAutoIndex(t *testing.T) {
 		"\x1b[36;100m   \x1b[0m\x1b[36;100m     \x1b[0m\x1b[36;100m            \x1b[0m\x1b[36;100m TOTAL     \x1b[0m\x1b[36;100m  10000 \x1b[0m\x1b[36;100m                             \x1b[0m",
 	}, "\n")
 	out := table.Render()
+	fmt.Println(out)
 	assert.Equal(t, expectedOut, out)
 
 	// dump it out in a easy way to update the test if things are meant to
@@ -345,6 +354,101 @@ func TestTable_Render_ColoredStyleAutoIndex(t *testing.T) {
 		}
 		fmt.Println()
 	}
+}
+
+func TestTable_Render_ColumnConfigs(t *testing.T) {
+	generatePrefixTransformer := func(prefix string) text.Transformer {
+		return func(val interface{}) string {
+			return fmt.Sprintf("%s%v", prefix, val)
+		}
+	}
+	generateSuffixTransformer := func(suffix string) text.Transformer {
+		return func(val interface{}) string {
+			return fmt.Sprintf("%v%s", val, suffix)
+		}
+	}
+	salaryTransformer := text.Transformer(func(val interface{}) string {
+		if valInt, ok := val.(int); ok {
+			return fmt.Sprintf("$ %.2f", float64(valInt)+0.03)
+		}
+		return strings.Replace(fmt.Sprint(val), "ry", "riii", -1)
+	})
+
+	tw := NewWriter()
+	tw.AppendHeader(testHeaderMultiLine)
+	tw.AppendRows(testRows)
+	tw.AppendRow(testRowMultiLine)
+	tw.AppendFooter(testFooterMultiLine)
+	tw.SetAutoIndex(true)
+	tw.SetColumnConfigs([]ColumnConfig{
+		{
+			Name:              fmt.Sprint(testHeaderMultiLine[1]), // First Name
+			Align:             text.AlignRight,
+			AlignFooter:       text.AlignRight,
+			AlignHeader:       text.AlignRight,
+			Colors:            text.Colors{text.BgBlack, text.FgRed},
+			ColorsHeader:      text.Colors{text.BgRed, text.FgBlack, text.Bold},
+			ColorsFooter:      text.Colors{text.BgRed, text.FgBlack},
+			Transformer:       generatePrefixTransformer("(r_"),
+			TransformerFooter: generatePrefixTransformer("(f_"),
+			TransformerHeader: generatePrefixTransformer("(h_"),
+			VAlign:            text.VAlignTop,
+			VAlignFooter:      text.VAlignTop,
+			VAlignHeader:      text.VAlignTop,
+			WidthMax:          10,
+		}, {
+			Name:              fmt.Sprint(testHeaderMultiLine[2]), // Last Name
+			Align:             text.AlignLeft,
+			AlignFooter:       text.AlignLeft,
+			AlignHeader:       text.AlignLeft,
+			Colors:            text.Colors{text.BgBlack, text.FgGreen},
+			ColorsHeader:      text.Colors{text.BgGreen, text.FgBlack, text.Bold},
+			ColorsFooter:      text.Colors{text.BgGreen, text.FgBlack},
+			Transformer:       generateSuffixTransformer("_r)"),
+			TransformerFooter: generateSuffixTransformer("_f)"),
+			TransformerHeader: generateSuffixTransformer("_h)"),
+			VAlign:            text.VAlignMiddle,
+			VAlignFooter:      text.VAlignMiddle,
+			VAlignHeader:      text.VAlignMiddle,
+			WidthMax:          10,
+		}, {
+			Number:            4, // Salary
+			Colors:            text.Colors{text.BgBlack, text.FgBlue},
+			ColorsHeader:      text.Colors{text.BgBlue, text.FgBlack, text.Bold},
+			ColorsFooter:      text.Colors{text.BgBlue, text.FgBlack},
+			Transformer:       salaryTransformer,
+			TransformerFooter: salaryTransformer,
+			TransformerHeader: salaryTransformer,
+			VAlign:            text.VAlignBottom,
+			VAlignFooter:      text.VAlignBottom,
+			VAlignHeader:      text.VAlignBottom,
+			WidthMin:          16,
+		}, {
+			Name:   "Non-existent Column",
+			Colors: text.Colors{text.BgYellow, text.FgHiRed},
+		},
+	})
+	tw.SetStyle(styleTest)
+
+	expectedOutLines := []string{
+		"(---^-----^-----------^------------^------------------^-----------------------------)",
+		"[< >|<  #>|\x1b[41;30;1m< (H_FIRST>\x1b[0m|\x1b[42;30;1m<LAST      >\x1b[0m|\x1b[44;30;1m<                >\x1b[0m|<                           >]",
+		"[< >|<   >|\x1b[41;30;1m<     NAME>\x1b[0m|\x1b[42;30;1m<NAME_H)   >\x1b[0m|\x1b[44;30;1m<        SALARIII>\x1b[0m|<                           >]",
+		"{---+-----+-----------+------------+------------------+-----------------------------}",
+		"[<1>|<  1>|\x1b[40;31m<  (r_Arya>\x1b[0m|\x1b[40;32m<Stark_r)  >\x1b[0m|\x1b[40;34m<       $ 3000.03>\x1b[0m|<                           >]",
+		"[<2>|< 20>|\x1b[40;31m<   (r_Jon>\x1b[0m|\x1b[40;32m<Snow_r)   >\x1b[0m|\x1b[40;34m<       $ 2000.03>\x1b[0m|<You know nothing, Jon Snow!>]",
+		"[<3>|<300>|\x1b[40;31m<(r_Tyrion>\x1b[0m|\x1b[40;32m<Lannister_>\x1b[0m|\x1b[40;34m<                >\x1b[0m|<                           >]",
+		"[< >|<   >|\x1b[40;31m<         >\x1b[0m|\x1b[40;32m<r)        >\x1b[0m|\x1b[40;34m<       $ 5000.03>\x1b[0m|<                           >]",
+		"[<4>|<  0>|\x1b[40;31m<(r_Winter>\x1b[0m|\x1b[40;32m<          >\x1b[0m|\x1b[40;34m<                >\x1b[0m|<Coming.                    >]",
+		"[< >|<   >|\x1b[40;31m<         >\x1b[0m|\x1b[40;32m<Is_r)     >\x1b[0m|\x1b[40;34m<                >\x1b[0m|<The North Remembers!       >]",
+		"[< >|<   >|\x1b[40;31m<         >\x1b[0m|\x1b[40;32m<          >\x1b[0m|\x1b[40;34m<          $ 0.03>\x1b[0m|<This is known.             >]",
+		"{---+-----+-----------+------------+------------------+-----------------------------}",
+		"[< >|<   >|\x1b[41;30m<      (F_>\x1b[0m|\x1b[42;30m<TOTAL     >\x1b[0m|\x1b[44;30m<                >\x1b[0m|<                           >]",
+		"[< >|<   >|\x1b[41;30m<         >\x1b[0m|\x1b[42;30m<SALARY_F) >\x1b[0m|\x1b[44;30m<      $ 10000.03>\x1b[0m|<                           >]",
+		"\\---v-----v-----------v------------v------------------v-----------------------------/",
+	}
+	expectedOut := strings.Join(expectedOutLines, "\n")
+	assert.Equal(t, expectedOut, tw.Render())
 }
 
 func TestTable_Render_Empty(t *testing.T) {
@@ -410,6 +514,59 @@ func TestTable_Render_Paged(t *testing.T) {
 	assert.Equal(t, expectedOut, tw.Render())
 }
 
+func TestTable_Render_RowPainter(t *testing.T) {
+	tw := NewWriter()
+	tw.AppendHeader(testHeader)
+	tw.AppendRows(testRows)
+	tw.AppendRow(testRowMultiLine)
+	tw.AppendFooter(testFooter)
+	tw.SetIndexColumn(1)
+	tw.SetRowPainter(RowPainter(func(row Row) text.Colors {
+		if salary, ok := row[3].(int); ok {
+			if salary > 3000 {
+				return text.Colors{text.BgYellow, text.FgBlack}
+			} else if salary < 2000 {
+				return text.Colors{text.BgRed, text.FgBlack}
+			}
+		}
+		return nil
+	}))
+	tw.SetStyle(StyleLight)
+	tw.SortBy([]SortBy{{Name: "Salary", Mode: AscNumeric}})
+
+	expectedOutLines := []string{
+		"┌─────┬────────────┬───────────┬────────┬─────────────────────────────┐",
+		"│   # │ FIRST NAME │ LAST NAME │ SALARY │                             │",
+		"├─────┼────────────┼───────────┼────────┼─────────────────────────────┤",
+		"│   0 │\x1b[41;30m Winter     \x1b[0m│\x1b[41;30m Is        \x1b[0m│\x1b[41;30m      0 \x1b[0m│\x1b[41;30m Coming.                     \x1b[0m│",
+		"│     │\x1b[41;30m            \x1b[0m│\x1b[41;30m           \x1b[0m│\x1b[41;30m        \x1b[0m│\x1b[41;30m The North Remembers!        \x1b[0m│",
+		"│     │\x1b[41;30m            \x1b[0m│\x1b[41;30m           \x1b[0m│\x1b[41;30m        \x1b[0m│\x1b[41;30m This is known.              \x1b[0m│",
+		"│  20 │ Jon        │ Snow      │   2000 │ You know nothing, Jon Snow! │",
+		"│   1 │ Arya       │ Stark     │   3000 │                             │",
+		"│ 300 │\x1b[43;30m Tyrion     \x1b[0m│\x1b[43;30m Lannister \x1b[0m│\x1b[43;30m   5000 \x1b[0m│\x1b[43;30m                             \x1b[0m│",
+		"├─────┼────────────┼───────────┼────────┼─────────────────────────────┤",
+		"│     │            │ TOTAL     │  10000 │                             │",
+		"└─────┴────────────┴───────────┴────────┴─────────────────────────────┘",
+	}
+	expectedOut := strings.Join(expectedOutLines, "\n")
+	assert.Equal(t, expectedOut, tw.Render())
+
+	tw.SetStyle(StyleColoredBright)
+	tw.Style().Color.RowAlternate = tw.Style().Color.Row
+	expectedOutLines = []string{
+		"\x1b[106;30m   # \x1b[0m\x1b[106;30m FIRST NAME \x1b[0m\x1b[106;30m LAST NAME \x1b[0m\x1b[106;30m SALARY \x1b[0m\x1b[106;30m                             \x1b[0m",
+		"\x1b[106;30m   0 \x1b[0m\x1b[41;30m Winter     \x1b[0m\x1b[41;30m Is        \x1b[0m\x1b[41;30m      0 \x1b[0m\x1b[41;30m Coming.                     \x1b[0m",
+		"\x1b[106;30m     \x1b[0m\x1b[41;30m            \x1b[0m\x1b[41;30m           \x1b[0m\x1b[41;30m        \x1b[0m\x1b[41;30m The North Remembers!        \x1b[0m",
+		"\x1b[106;30m     \x1b[0m\x1b[41;30m            \x1b[0m\x1b[41;30m           \x1b[0m\x1b[41;30m        \x1b[0m\x1b[41;30m This is known.              \x1b[0m",
+		"\x1b[106;30m  20 \x1b[0m\x1b[107;30m Jon        \x1b[0m\x1b[107;30m Snow      \x1b[0m\x1b[107;30m   2000 \x1b[0m\x1b[107;30m You know nothing, Jon Snow! \x1b[0m",
+		"\x1b[106;30m   1 \x1b[0m\x1b[107;30m Arya       \x1b[0m\x1b[107;30m Stark     \x1b[0m\x1b[107;30m   3000 \x1b[0m\x1b[107;30m                             \x1b[0m",
+		"\x1b[106;30m 300 \x1b[0m\x1b[43;30m Tyrion     \x1b[0m\x1b[43;30m Lannister \x1b[0m\x1b[43;30m   5000 \x1b[0m\x1b[43;30m                             \x1b[0m",
+		"\x1b[46;30m     \x1b[0m\x1b[46;30m            \x1b[0m\x1b[46;30m TOTAL     \x1b[0m\x1b[46;30m  10000 \x1b[0m\x1b[46;30m                             \x1b[0m",
+	}
+	expectedOut = strings.Join(expectedOutLines, "\n")
+	assert.Equal(t, expectedOut, tw.Render())
+}
+
 func TestTable_Render_Sorted(t *testing.T) {
 	tw := NewWriter()
 	tw.AppendHeader(testHeader)
@@ -432,7 +589,7 @@ func TestTable_Render_Sorted(t *testing.T) {
 	assert.Equal(t, expectedOut, tw.Render())
 }
 
-func TestList_Render_Styles(t *testing.T) {
+func TestTable_Render_Styles(t *testing.T) {
 	tw := NewWriter()
 	tw.AppendHeader(testHeader)
 	tw.AppendRows(testRows)
