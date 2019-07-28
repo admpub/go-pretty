@@ -1,7 +1,7 @@
 package table
 
 import (
-	"github.com/jedib0t/go-pretty/text"
+	"github.com/admpub/go-pretty/text"
 )
 
 // ColumnConfig contains configurations that determine and modify the way the
