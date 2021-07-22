@@ -49,6 +49,25 @@ func TestTracker_Increment(t *testing.T) {
 	assert.True(t, tracker.IsDone())
 }
 
+func TestTracker_IncrementWithError(t *testing.T) {
+	tracker := Tracker{Total: 100}
+	assert.Equal(t, int64(0), tracker.value)
+	assert.Equal(t, int64(100), tracker.Total)
+	assert.False(t, tracker.IsErrored())
+
+	tracker.IncrementWithError(10)
+	assert.Equal(t, int64(10), tracker.value)
+	assert.Equal(t, int64(100), tracker.Total)
+	assert.True(t, tracker.IsErrored())
+
+	tracker.IncrementWithError(100)
+	assert.Equal(t, int64(110), tracker.value)
+	assert.Equal(t, int64(110), tracker.Total)
+	assert.False(t, tracker.timeStop.IsZero())
+	assert.True(t, tracker.IsErrored())
+	assert.True(t, tracker.IsDone())
+}
+
 func TestTracker_IsDone(t *testing.T) {
 	tracker := Tracker{Total: 10}
 	assert.False(t, tracker.IsDone())
@@ -57,13 +76,45 @@ func TestTracker_IsDone(t *testing.T) {
 	assert.True(t, tracker.IsDone())
 }
 
+func TestTracker_IsIndeterminate(t *testing.T) {
+	tracker := Tracker{Total: 10}
+	assert.False(t, tracker.IsIndeterminate())
+
+	tracker.Total = 0
+	assert.True(t, tracker.IsIndeterminate())
+}
+
 func TestTracker_MarkAsDone(t *testing.T) {
 	tracker := Tracker{}
 	assert.False(t, tracker.IsDone())
+	assert.False(t, tracker.IsErrored())
 	assert.True(t, tracker.timeStop.IsZero())
 
 	tracker.MarkAsDone()
 	assert.True(t, tracker.IsDone())
+	assert.False(t, tracker.IsErrored())
+	assert.False(t, tracker.timeStop.IsZero())
+
+	tracker.MarkAsErrored()
+	assert.True(t, tracker.IsDone())
+	assert.False(t, tracker.IsErrored())
+	assert.False(t, tracker.timeStop.IsZero())
+}
+
+func TestTracker_MarkAsError(t *testing.T) {
+	tracker := Tracker{}
+	assert.False(t, tracker.IsDone())
+	assert.False(t, tracker.IsErrored())
+	assert.True(t, tracker.timeStop.IsZero())
+
+	tracker.MarkAsErrored()
+	assert.True(t, tracker.IsDone())
+	assert.True(t, tracker.IsErrored())
+	assert.False(t, tracker.timeStop.IsZero())
+
+	tracker.MarkAsDone()
+	assert.True(t, tracker.IsDone())
+	assert.True(t, tracker.IsErrored())
 	assert.False(t, tracker.timeStop.IsZero())
 }
 
@@ -114,4 +165,22 @@ func TestTracker_SetValue(t *testing.T) {
 	tracker.SetValue(tracker.Total)
 	assert.Equal(t, tracker.Total, tracker.value)
 	assert.True(t, tracker.done)
+}
+
+func TestTracker_Value(t *testing.T) {
+	tracker := Tracker{}
+	assert.Equal(t, int64(0), tracker.value)
+	assert.Equal(t, int64(0), tracker.Value())
+
+	tracker.SetValue(5)
+	assert.Equal(t, int64(5), tracker.value)
+	assert.Equal(t, int64(5), tracker.Value())
+}
+
+func TestTracker_UpdateMessage(t *testing.T) {
+	tracker := Tracker{Message: "foo"}
+	assert.Equal(t, "foo", tracker.message())
+
+	tracker.UpdateMessage("bar")
+	assert.Equal(t, "bar", tracker.message())
 }

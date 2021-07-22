@@ -1,7 +1,9 @@
 package progress
 
 import (
+	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -13,12 +15,12 @@ type outputWriter struct {
 	Text strings.Builder
 }
 
-func (rc *outputWriter) Write(p []byte) (n int, err error) {
-	return rc.Text.Write(p)
+func (w *outputWriter) Write(p []byte) (n int, err error) {
+	return w.Text.Write(p)
 }
 
-func (rc *outputWriter) String() string {
-	return rc.Text.String()
+func (w *outputWriter) String() string {
+	return w.Text.String()
 }
 
 func generateWriter() Writer {
@@ -41,9 +43,9 @@ func generateWriter() Writer {
 }
 
 func trackSomething(pw Writer, tracker *Tracker) {
-	pw.AppendTracker(tracker)
-
 	incrementPerCycle := tracker.Total / 3
+
+	pw.AppendTracker(tracker)
 
 	c := time.Tick(time.Millisecond * 100)
 	for !tracker.IsDone() {
@@ -58,8 +60,52 @@ func trackSomething(pw Writer, tracker *Tracker) {
 	}
 }
 
+func trackSomethingErrored(pw Writer, tracker *Tracker) {
+	incrementPerCycle := tracker.Total / 3
+	total := tracker.Total
+	tracker.Total = 0
+
+	pw.AppendTracker(tracker)
+
+	c := time.Tick(time.Millisecond * 100)
+	for !tracker.IsDone() {
+		select {
+		case <-c:
+			if tracker.value+incrementPerCycle > total {
+				tracker.MarkAsErrored()
+			} else {
+				tracker.IncrementWithError(incrementPerCycle)
+			}
+		}
+	}
+}
+
+func trackSomethingIndeterminate(pw Writer, tracker *Tracker) {
+	incrementPerCycle := tracker.Total / 3
+	total := tracker.Total
+	tracker.Total = 0
+
+	pw.AppendTracker(tracker)
+
+	c := time.Tick(time.Millisecond * 100)
+	for !tracker.IsDone() {
+		select {
+		case <-c:
+			if tracker.value+incrementPerCycle > total {
+				tracker.Increment(total - tracker.value)
+			} else {
+				tracker.Increment(incrementPerCycle)
+			}
+			if tracker.Value() >= total {
+				tracker.MarkAsDone()
+			}
+		}
+	}
+}
+
 func renderAndWait(pw Writer, autoStop bool) {
 	go pw.Render()
+	go pw.Render() // this call should be a no-op
 	time.Sleep(time.Millisecond * 100)
 	for pw.IsRenderInProgress() {
 		if pw.LengthActive() == 0 {
@@ -69,6 +115,16 @@ func renderAndWait(pw Writer, autoStop bool) {
 	}
 	if !autoStop {
 		pw.Stop()
+	}
+}
+
+func showOutputOnFailure(t *testing.T, out string) {
+	if t.Failed() {
+		lines := strings.Split(out, "\n")
+		sort.Strings(lines)
+		for _, line := range lines {
+			fmt.Printf("%#v,\n", line)
+		}
 	}
 }
 
@@ -188,13 +244,150 @@ func TestProgress_generateTrackerStr(t *testing.T) {
 		100: "##########",
 	}
 
+	finalOutput := strings.Builder{}
 	tr := Tracker{Total: 100}
-	for value := int64(0); value <= tr.Total; value++ {
+	for value := int64(0); value <= 100; value++ {
 		tr.value = value
-		//fmt.Printf(" %5d: \"%s\",\n", value, pw.generateTrackerStr(&tr, 10))
+		actualStr := pw.generateTrackerStr(&tr, 10, renderHint{})
 		if expectedStr, ok := expectedTrackerStrMap[value]; ok {
-			assert.Equal(t, expectedStr, pw.generateTrackerStr(&tr, 10), "value=%d", value)
+			assert.Equal(t, expectedStr, actualStr, "value=%d", value)
 		}
+		finalOutput.WriteString(fmt.Sprintf(" %d: \"%s\",\n", value, actualStr))
+	}
+	if t.Failed() {
+		fmt.Println(finalOutput.String())
+	}
+}
+
+func TestProgress_generateTrackerStr_Indeterminate(t *testing.T) {
+	pw := Progress{}
+	pw.Style().Chars = StyleChars{
+		BoxLeft:       "",
+		BoxRight:      "",
+		Finished:      "#",
+		Finished25:    "1",
+		Finished50:    "2",
+		Finished75:    "3",
+		Indeterminate: indeterminateIndicatorMovingBackAndForth("<=>"),
+		Unfinished:    ".",
+	}
+
+	expectedTrackerStrMap := map[int64]string{
+		0:   "<=>.......",
+		1:   ".<=>......",
+		2:   "..<=>.....",
+		3:   "...<=>....",
+		4:   "....<=>...",
+		5:   ".....<=>..",
+		6:   "......<=>.",
+		7:   ".......<=>",
+		8:   "......<=>.",
+		9:   ".....<=>..",
+		10:  "....<=>...",
+		11:  "...<=>....",
+		12:  "..<=>.....",
+		13:  ".<=>......",
+		14:  "<=>.......",
+		15:  ".<=>......",
+		16:  "..<=>.....",
+		17:  "...<=>....",
+		18:  "....<=>...",
+		19:  ".....<=>..",
+		20:  "......<=>.",
+		21:  ".......<=>",
+		22:  "......<=>.",
+		23:  ".....<=>..",
+		24:  "....<=>...",
+		25:  "...<=>....",
+		26:  "..<=>.....",
+		27:  ".<=>......",
+		28:  "<=>.......",
+		29:  ".<=>......",
+		30:  "..<=>.....",
+		31:  "...<=>....",
+		32:  "....<=>...",
+		33:  ".....<=>..",
+		34:  "......<=>.",
+		35:  ".......<=>",
+		36:  "......<=>.",
+		37:  ".....<=>..",
+		38:  "....<=>...",
+		39:  "...<=>....",
+		40:  "..<=>.....",
+		41:  ".<=>......",
+		42:  "<=>.......",
+		43:  ".<=>......",
+		44:  "..<=>.....",
+		45:  "...<=>....",
+		46:  "....<=>...",
+		47:  ".....<=>..",
+		48:  "......<=>.",
+		49:  ".......<=>",
+		50:  "......<=>.",
+		51:  ".....<=>..",
+		52:  "....<=>...",
+		53:  "...<=>....",
+		54:  "..<=>.....",
+		55:  ".<=>......",
+		56:  "<=>.......",
+		57:  ".<=>......",
+		58:  "..<=>.....",
+		59:  "...<=>....",
+		60:  "....<=>...",
+		61:  ".....<=>..",
+		62:  "......<=>.",
+		63:  ".......<=>",
+		64:  "......<=>.",
+		65:  ".....<=>..",
+		66:  "....<=>...",
+		67:  "...<=>....",
+		68:  "..<=>.....",
+		69:  ".<=>......",
+		70:  "<=>.......",
+		71:  ".<=>......",
+		72:  "..<=>.....",
+		73:  "...<=>....",
+		74:  "....<=>...",
+		75:  ".....<=>..",
+		76:  "......<=>.",
+		77:  ".......<=>",
+		78:  "......<=>.",
+		79:  ".....<=>..",
+		80:  "....<=>...",
+		81:  "...<=>....",
+		82:  "..<=>.....",
+		83:  ".<=>......",
+		84:  "<=>.......",
+		85:  ".<=>......",
+		86:  "..<=>.....",
+		87:  "...<=>....",
+		88:  "....<=>...",
+		89:  ".....<=>..",
+		90:  "......<=>.",
+		91:  ".......<=>",
+		92:  "......<=>.",
+		93:  ".....<=>..",
+		94:  "....<=>...",
+		95:  "...<=>....",
+		96:  "..<=>.....",
+		97:  ".<=>......",
+		98:  "<=>.......",
+		99:  ".<=>......",
+		100: "..<=>.....",
+	}
+
+	finalOutput := strings.Builder{}
+	tr := Tracker{Total: 0}
+	for value := int64(0); value <= 100; value++ {
+		tr.value = value
+		actualStr := pw.generateTrackerStr(&tr, 10, renderHint{})
+		if expectedStr, ok := expectedTrackerStrMap[value]; ok {
+			assert.Equal(t, expectedStr, actualStr, "value=%d", value)
+		}
+		finalOutput.WriteString(fmt.Sprintf(" %d: \"%s\",\n", value, actualStr))
+	}
+	if t.Failed() {
+		fmt.Println(finalOutput.String())
 	}
 }
 
@@ -218,16 +411,16 @@ func TestProgress_RenderSomeTrackers_OnLeftSide(t *testing.T) {
 	pw := generateWriter()
 	pw.SetOutputWriter(&renderOutput)
 	pw.SetTrackerPosition(PositionLeft)
-	go trackSomething(pw, &Tracker{Message: "Calculation Total   # 1\r", Total: 1000, Units: UnitsDefault})
+	go trackSomething(pw, &Tracker{Message: "Calculating Total   # 1\r", Total: 1000, Units: UnitsDefault})
 	go trackSomething(pw, &Tracker{Message: "Downloading File\t# 2", Total: 1000, Units: UnitsBytes})
 	go trackSomething(pw, &Tracker{Message: "Transferring Amount # 3", Total: 1000, Units: UnitsCurrencyDollar})
 	renderAndWait(pw, false)
 
 	expectedOutPatterns := []*regexp.Regexp{
-		regexp.MustCompile(`\x1b\[K\d+\.\d+% \[[#.]{23}] \[\d+ in [\d.]+ms] \.\.\. Calculation Total   # 1`),
+		regexp.MustCompile(`\x1b\[K\d+\.\d+% \[[#.]{23}] \[\d+ in [\d.]+ms] \.\.\. Calculating Total   # 1`),
 		regexp.MustCompile(`\x1b\[K\d+\.\d+% \[[#.]{23}] \[\d+B in [\d.]+ms] \.\.\. Downloading File    # 2`),
 		regexp.MustCompile(`\x1b\[K\d+\.\d+% \[[#.]{23}] \[\$\d+ in [\d.]+ms] \.\.\. Transferring Amount # 3`),
-		regexp.MustCompile(`\x1b\[KCalculation Total   # 1 \.\.\. done! \[\d+\.\d+K in [\d.]+ms]`),
+		regexp.MustCompile(`\x1b\[KCalculating Total   # 1 \.\.\. done! \[\d+\.\d+K in [\d.]+ms]`),
 		regexp.MustCompile(`\x1b\[KDownloading File    # 2 \.\.\. done! \[\d+\.\d+KB in [\d.]+ms]`),
 		regexp.MustCompile(`\x1b\[KTransferring Amount # 3 \.\.\. done! \[\$\d+\.\d+K in [\d.]+ms]`),
 	}
@@ -237,6 +430,7 @@ func TestProgress_RenderSomeTrackers_OnLeftSide(t *testing.T) {
 			assert.Fail(t, "Failed to find a pattern in the Output.", expectedOutPattern.String())
 		}
 	}
+	showOutputOnFailure(t, out)
 }
 
 func TestProgress_RenderSomeTrackers_OnRightSide(t *testing.T) {
@@ -245,16 +439,16 @@ func TestProgress_RenderSomeTrackers_OnRightSide(t *testing.T) {
 	pw := generateWriter()
 	pw.SetOutputWriter(&renderOutput)
 	pw.SetTrackerPosition(PositionRight)
-	go trackSomething(pw, &Tracker{Message: "Calculation Total   # 1\r", Total: 1000, Units: UnitsDefault})
+	go trackSomething(pw, &Tracker{Message: "Calculating Total   # 1\r", Total: 1000, Units: UnitsDefault})
 	go trackSomething(pw, &Tracker{Message: "Downloading File\t# 2", Total: 1000, Units: UnitsBytes})
 	go trackSomething(pw, &Tracker{Message: "Transferring Amount # 3", Total: 1000, Units: UnitsCurrencyDollar})
 	renderAndWait(pw, false)
 
 	expectedOutPatterns := []*regexp.Regexp{
-		regexp.MustCompile(`\x1b\[KCalculation Total   # 1 \.\.\. \d+\.\d+% \[[#.]{23}] \[\d+ in [\d.]+ms]`),
+		regexp.MustCompile(`\x1b\[KCalculating Total   # 1 \.\.\. \d+\.\d+% \[[#.]{23}] \[\d+ in [\d.]+ms]`),
 		regexp.MustCompile(`\x1b\[KDownloading File    # 2 \.\.\. \d+\.\d+% \[[#.]{23}] \[\d+B in [\d.]+ms]`),
 		regexp.MustCompile(`\x1b\[KTransferring Amount # 3 \.\.\. \d+\.\d+% \[[#.]{23}] \[\$\d+ in [\d.]+ms]`),
-		regexp.MustCompile(`\x1b\[KCalculation Total   # 1 \.\.\. done! \[\d+\.\d+K in [\d.]+ms]`),
+		regexp.MustCompile(`\x1b\[KCalculating Total   # 1 \.\.\. done! \[\d+\.\d+K in [\d.]+ms]`),
 		regexp.MustCompile(`\x1b\[KDownloading File    # 2 \.\.\. done! \[\d+\.\d+KB in [\d.]+ms]`),
 		regexp.MustCompile(`\x1b\[KTransferring Amount # 3 \.\.\. done! \[\$\d+\.\d+K in [\d.]+ms]`),
 	}
@@ -264,6 +458,7 @@ func TestProgress_RenderSomeTrackers_OnRightSide(t *testing.T) {
 			assert.Fail(t, "Failed to find a pattern in the Output.", expectedOutPattern.String())
 		}
 	}
+	showOutputOnFailure(t, out)
 }
 
 func TestProgress_RenderSomeTrackers_WithAutoStop(t *testing.T) {
@@ -273,16 +468,16 @@ func TestProgress_RenderSomeTrackers_WithAutoStop(t *testing.T) {
 	pw.SetAutoStop(true)
 	pw.SetOutputWriter(&renderOutput)
 	pw.SetTrackerPosition(PositionRight)
-	go trackSomething(pw, &Tracker{Message: "Calculation Total   # 1\r", Total: 1000, Units: UnitsDefault})
+	go trackSomething(pw, &Tracker{Message: "Calculating Total   # 1\r", Total: 1000, Units: UnitsDefault})
 	go trackSomething(pw, &Tracker{Message: "Downloading File\t# 2", Total: 1000, Units: UnitsBytes})
 	go trackSomething(pw, &Tracker{Message: "Transferring Amount # 3", Total: 1000, Units: UnitsCurrencyDollar})
 	renderAndWait(pw, true)
 
 	expectedOutPatterns := []*regexp.Regexp{
-		regexp.MustCompile(`\x1b\[KCalculation Total   # 1 \.\.\. \d+\.\d+% \[[#.]{23}] \[\d+ in [\d.]+ms]`),
+		regexp.MustCompile(`\x1b\[KCalculating Total   # 1 \.\.\. \d+\.\d+% \[[#.]{23}] \[\d+ in [\d.]+ms]`),
 		regexp.MustCompile(`\x1b\[KDownloading File    # 2 \.\.\. \d+\.\d+% \[[#.]{23}] \[\d+B in [\d.]+ms]`),
 		regexp.MustCompile(`\x1b\[KTransferring Amount # 3 \.\.\. \d+\.\d+% \[[#.]{23}] \[\$\d+ in [\d.]+ms]`),
-		regexp.MustCompile(`\x1b\[KCalculation Total   # 1 \.\.\. done! \[\d+\.\d+K in [\d.]+ms]`),
+		regexp.MustCompile(`\x1b\[KCalculating Total   # 1 \.\.\. done! \[\d+\.\d+K in [\d.]+ms]`),
 		regexp.MustCompile(`\x1b\[KDownloading File    # 2 \.\.\. done! \[\d+\.\d+KB in [\d.]+ms]`),
 		regexp.MustCompile(`\x1b\[KTransferring Amount # 3 \.\.\. done! \[\$\d+\.\d+K in [\d.]+ms]`),
 	}
@@ -292,6 +487,61 @@ func TestProgress_RenderSomeTrackers_WithAutoStop(t *testing.T) {
 			assert.Fail(t, "Failed to find a pattern in the Output.", expectedOutPattern.String())
 		}
 	}
+	showOutputOnFailure(t, out)
+}
+
+func TestProgress_RenderSomeTrackers_WithError(t *testing.T) {
+	renderOutput := outputWriter{}
+
+	pw := generateWriter()
+	pw.SetOutputWriter(&renderOutput)
+	go trackSomething(pw, &Tracker{Message: "Calculating Total   # 1\r", Total: 1000, Units: UnitsDefault})
+	go trackSomething(pw, &Tracker{Message: "Downloading File\t# 2", Total: 1000, Units: UnitsBytes})
+	go trackSomethingErrored(pw, &Tracker{Message: "Transferring Amount # 3", Total: 1000, Units: UnitsCurrencyDollar})
+	renderAndWait(pw, false)
+
+	expectedOutPatterns := []*regexp.Regexp{
+		regexp.MustCompile(`\x1b\[KCalculating Total   # 1 \.\.\. \d+\.\d+% \[[#.]{23}] \[\d+ in [\d.]+ms]`),
+		regexp.MustCompile(`\x1b\[KDownloading File    # 2 \.\.\. \d+\.\d+% \[[#.]{23}] \[\d+B in [\d.]+ms]`),
+		regexp.MustCompile(`\x1b\[KTransferring Amount # 3 \.\.\.  \?\?\?  \[[<#>.]{23}] \[\$\d+ in [\d.]+ms]`),
+		regexp.MustCompile(`\x1b\[KCalculating Total   # 1 \.\.\. done! \[\d+\.\d+K in [\d.]+ms]`),
+		regexp.MustCompile(`\x1b\[KDownloading File    # 2 \.\.\. done! \[\d+\.\d+KB in [\d.]+ms]`),
+		regexp.MustCompile(`\x1b\[KTransferring Amount # 3 \.\.\. fail! \[\$\d+ in [\d.]+ms]`),
+	}
+	out := renderOutput.String()
+	for _, expectedOutPattern := range expectedOutPatterns {
+		if !expectedOutPattern.MatchString(out) {
+			assert.Fail(t, "Failed to find a pattern in the Output.", expectedOutPattern.String())
+		}
+	}
+	showOutputOnFailure(t, out)
+}
+
+func TestProgress_RenderSomeTrackers_WithIndeterminateTracker(t *testing.T) {
+	renderOutput := outputWriter{}
+
+	pw := generateWriter()
+	pw.SetOutputWriter(&renderOutput)
+	go trackSomething(pw, &Tracker{Message: "Calculating Total   # 1\r", Total: 1000, Units: UnitsDefault})
+	go trackSomething(pw, &Tracker{Message: "Downloading File\t# 2", Total: 1000, Units: UnitsBytes})
+	go trackSomethingIndeterminate(pw, &Tracker{Message: "Transferring Amount # 3", Total: 1000, Units: UnitsCurrencyDollar})
+	renderAndWait(pw, false)
+
+	expectedOutPatterns := []*regexp.Regexp{
+		regexp.MustCompile(`\x1b\[KCalculating Total   # 1 \.\.\. \d+\.\d+% \[[#.]{23}] \[\d+ in [\d.]+ms]`),
+		regexp.MustCompile(`\x1b\[KDownloading File    # 2 \.\.\. \d+\.\d+% \[[#.]{23}] \[\d+B in [\d.]+ms]`),
+		regexp.MustCompile(`\x1b\[KTransferring Amount # 3 \.\.\.  \?\?\?  \[[<#>.]{23}] \[\$\d+ in [\d.]+ms]`),
+		regexp.MustCompile(`\x1b\[KCalculating Total   # 1 \.\.\. done! \[\d+\.\d+K in [\d.]+ms]`),
+		regexp.MustCompile(`\x1b\[KDownloading File    # 2 \.\.\. done! \[\d+\.\d+KB in [\d.]+ms]`),
+		regexp.MustCompile(`\x1b\[KTransferring Amount # 3 \.\.\. done! \[\$\d+\.\d+K in [\d.]+ms]`),
+	}
+	out := renderOutput.String()
+	for _, expectedOutPattern := range expectedOutPatterns {
+		if !expectedOutPattern.MatchString(out) {
+			assert.Fail(t, "Failed to find a pattern in the Output.", expectedOutPattern.String())
+		}
+	}
+	showOutputOnFailure(t, out)
 }
 
 func TestProgress_RenderSomeTrackers_WithLineWidth1(t *testing.T) {
@@ -301,7 +551,7 @@ func TestProgress_RenderSomeTrackers_WithLineWidth1(t *testing.T) {
 	pw.SetMessageWidth(5)
 	pw.SetOutputWriter(&renderOutput)
 	pw.SetTrackerPosition(PositionRight)
-	go trackSomething(pw, &Tracker{Message: "Calculation Total   # 1\r", Total: 1000, Units: UnitsDefault})
+	go trackSomething(pw, &Tracker{Message: "Calculating Total   # 1\r", Total: 1000, Units: UnitsDefault})
 	go trackSomething(pw, &Tracker{Message: "Downloading File\t# 2", Total: 1000, Units: UnitsBytes})
 	go trackSomething(pw, &Tracker{Message: "Transferring Amount # 3", Total: 1000, Units: UnitsCurrencyDollar})
 	renderAndWait(pw, false)
@@ -320,6 +570,7 @@ func TestProgress_RenderSomeTrackers_WithLineWidth1(t *testing.T) {
 			assert.Fail(t, "Failed to find a pattern in the Output.", expectedOutPattern.String())
 		}
 	}
+	showOutputOnFailure(t, out)
 }
 
 func TestProgress_RenderSomeTrackers_WithLineWidth2(t *testing.T) {
@@ -329,16 +580,16 @@ func TestProgress_RenderSomeTrackers_WithLineWidth2(t *testing.T) {
 	pw.SetMessageWidth(50)
 	pw.SetOutputWriter(&renderOutput)
 	pw.SetTrackerPosition(PositionRight)
-	go trackSomething(pw, &Tracker{Message: "Calculation Total   # 1\r", Total: 1000, Units: UnitsDefault})
+	go trackSomething(pw, &Tracker{Message: "Calculating Total   # 1\r", Total: 1000, Units: UnitsDefault})
 	go trackSomething(pw, &Tracker{Message: "Downloading File\t# 2", Total: 1000, Units: UnitsBytes})
 	go trackSomething(pw, &Tracker{Message: "Transferring Amount # 3", Total: 1000, Units: UnitsCurrencyDollar})
 	renderAndWait(pw, false)
 
 	expectedOutPatterns := []*regexp.Regexp{
-		regexp.MustCompile(`\x1b\[KCalculation Total   # 1\s{28}\.\.\. \d+\.\d+% \[[#.]{23}] \[\d+ in [\d.]+ms]`),
+		regexp.MustCompile(`\x1b\[KCalculating Total   # 1\s{28}\.\.\. \d+\.\d+% \[[#.]{23}] \[\d+ in [\d.]+ms]`),
 		regexp.MustCompile(`\x1b\[KDownloading File    # 2\s{28}\.\.\. \d+\.\d+% \[[#.]{23}] \[\d+B in [\d.]+ms]`),
 		regexp.MustCompile(`\x1b\[KTransferring Amount # 3\s{28}\.\.\. \d+\.\d+% \[[#.]{23}] \[\$\d+ in [\d.]+ms]`),
-		regexp.MustCompile(`\x1b\[KCalculation Total   # 1\s{28}\.\.\. done! \[\d+\.\d+K in [\d.]+ms]`),
+		regexp.MustCompile(`\x1b\[KCalculating Total   # 1\s{28}\.\.\. done! \[\d+\.\d+K in [\d.]+ms]`),
 		regexp.MustCompile(`\x1b\[KDownloading File    # 2\s{28}\.\.\. done! \[\d+\.\d+KB in [\d.]+ms]`),
 		regexp.MustCompile(`\x1b\[KTransferring Amount # 3\s{28}\.\.\. done! \[\$\d+\.\d+K in [\d.]+ms]`),
 	}
@@ -348,6 +599,7 @@ func TestProgress_RenderSomeTrackers_WithLineWidth2(t *testing.T) {
 			assert.Fail(t, "Failed to find a pattern in the Output.", expectedOutPattern.String())
 		}
 	}
+	showOutputOnFailure(t, out)
 }
 
 func TestProgress_RenderSomeTrackers_WithOverallTracker(t *testing.T) {
@@ -358,19 +610,19 @@ func TestProgress_RenderSomeTrackers_WithOverallTracker(t *testing.T) {
 	pw.SetTrackerPosition(PositionRight)
 	pw.ShowOverallTracker(true)
 	pw.Style().Options.TimeOverallPrecision = time.Millisecond
-	go trackSomething(pw, &Tracker{Message: "Calculation Total   # 1\r", Total: 1000, Units: UnitsDefault})
+	go trackSomething(pw, &Tracker{Message: "Calculating Total   # 1\r", Total: 1000, Units: UnitsDefault})
 	go trackSomething(pw, &Tracker{Message: "Downloading File\t# 2", Total: 1000, Units: UnitsBytes})
 	go trackSomething(pw, &Tracker{Message: "Transferring Amount # 3", Total: 1000, Units: UnitsCurrencyDollar})
 	renderAndWait(pw, false)
 
 	expectedOutPatterns := []*regexp.Regexp{
-		regexp.MustCompile(`\x1b\[KCalculation Total   # 1 \.\.\. \d+\.\d+% \[[#.]{23}] \[\d+ in [\d.]+ms]`),
+		regexp.MustCompile(`\x1b\[KCalculating Total   # 1 \.\.\. \d+\.\d+% \[[#.]{23}] \[\d+ in [\d.]+ms]`),
 		regexp.MustCompile(`\x1b\[KDownloading File    # 2 \.\.\. \d+\.\d+% \[[#.]{23}] \[\d+B in [\d.]+ms]`),
 		regexp.MustCompile(`\x1b\[KTransferring Amount # 3 \.\.\. \d+\.\d+% \[[#.]{23}] \[\$\d+ in [\d.]+ms]`),
-		regexp.MustCompile(`\x1b\[KCalculation Total   # 1 \.\.\. done! \[\d+\.\d+K in [\d.]+ms]`),
+		regexp.MustCompile(`\x1b\[KCalculating Total   # 1 \.\.\. done! \[\d+\.\d+K in [\d.]+ms]`),
 		regexp.MustCompile(`\x1b\[KDownloading File    # 2 \.\.\. done! \[\d+\.\d+KB in [\d.]+ms]`),
 		regexp.MustCompile(`\x1b\[KTransferring Amount # 3 \.\.\. done! \[\$\d+\.\d+K in [\d.]+ms]`),
-		regexp.MustCompile(`\[[\d.ms]+; ~ETA: [\d.ms]+`),
+		regexp.MustCompile(`\x1b\[K\[[.#]+] \[[\d.ms]+; ~ETA: [\d.ms]+`),
 	}
 	out := renderOutput.String()
 	for _, expectedOutPattern := range expectedOutPatterns {
@@ -378,4 +630,36 @@ func TestProgress_RenderSomeTrackers_WithOverallTracker(t *testing.T) {
 			assert.Fail(t, "Failed to find a pattern in the Output.", expectedOutPattern.String())
 		}
 	}
+	showOutputOnFailure(t, out)
+}
+
+func TestProgress_RenderSomeTrackers_WithoutOverallTracker_WithETA(t *testing.T) {
+	renderOutput := outputWriter{}
+
+	pw := generateWriter()
+	pw.SetOutputWriter(&renderOutput)
+	pw.SetTrackerPosition(PositionRight)
+	pw.ShowETA(true)
+	pw.ShowOverallTracker(false)
+	pw.Style().Options.ETAPrecision = time.Millisecond
+	go trackSomething(pw, &Tracker{Message: "Calculating Total   # 1\r", Total: 1000, Units: UnitsDefault})
+	go trackSomething(pw, &Tracker{Message: "Downloading File\t# 2", Total: 1000, Units: UnitsBytes})
+	go trackSomething(pw, &Tracker{Message: "Transferring Amount # 3", Total: 1000, Units: UnitsCurrencyDollar})
+	renderAndWait(pw, false)
+
+	expectedOutPatterns := []*regexp.Regexp{
+		regexp.MustCompile(`\x1b\[KCalculating Total   # 1 \.\.\. \d+\.\d+% \[[#.]{23}] \[\d+ in [\d.]+ms; ~ETA: [\d]+ms]`),
+		regexp.MustCompile(`\x1b\[KDownloading File    # 2 \.\.\. \d+\.\d+% \[[#.]{23}] \[\d+B in [\d.]+ms; ~ETA: [\d]+ms]`),
+		regexp.MustCompile(`\x1b\[KTransferring Amount # 3 \.\.\. \d+\.\d+% \[[#.]{23}] \[\$\d+ in [\d.]+ms; ~ETA: [\d]+ms]`),
+		regexp.MustCompile(`\x1b\[KCalculating Total   # 1 \.\.\. done! \[\d+\.\d+K in [\d.]+ms]`),
+		regexp.MustCompile(`\x1b\[KDownloading File    # 2 \.\.\. done! \[\d+\.\d+KB in [\d.]+ms]`),
+		regexp.MustCompile(`\x1b\[KTransferring Amount # 3 \.\.\. done! \[\$\d+\.\d+K in [\d.]+ms]`),
+	}
+	out := renderOutput.String()
+	for _, expectedOutPattern := range expectedOutPatterns {
+		if !expectedOutPattern.MatchString(out) {
+			assert.Fail(t, "Failed to find a pattern in the Output.", expectedOutPattern.String())
+		}
+	}
+	showOutputOnFailure(t, out)
 }

@@ -1,12 +1,12 @@
 # go-pretty
 
-[![Build Status](https://travis-ci.com/jedib0t/go-pretty.svg?branch=master)](https://travis-ci.com/jedib0t/go-pretty)
-[![Coverage Status](https://coveralls.io/repos/github/jedib0t/go-pretty/badge.svg?branch=master)](https://coveralls.io/github/jedib0t/go-pretty?branch=master)
-[![Go Report Card](https://goreportcard.com/badge/github.com/admpub/go-pretty)](https://goreportcard.com/report/github.com/admpub/go-pretty)
-[![GoDoc](https://godoc.org/github.com/admpub/go-pretty?status.svg)](https://godoc.org/github.com/admpub/go-pretty)
+[![Go Reference](https://pkg.go.dev/badge/github.com/jedib0t/go-pretty/v6.svg)](https://pkg.go.dev/github.com/jedib0t/go-pretty/v6)
+[![Build Status](https://github.com/jedib0t/go-pretty/workflows/CI/badge.svg?branch=main)](https://github.com/jedib0t/go-pretty/actions?query=workflow%3ACI+event%3Apush+branch%3Amain)
+[![Coverage Status](https://coveralls.io/repos/github/jedib0t/go-pretty/badge.svg?branch=main)](https://coveralls.io/github/jedib0t/go-pretty?branch=main)
+[![Go Report Card](https://goreportcard.com/badge/github.com/jedib0t/go-pretty)](https://goreportcard.com/report/github.com/jedib0t/go-pretty)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=jedib0t_go-pretty&metric=alert_status)](https://sonarcloud.io/dashboard?id=jedib0t_go-pretty)
 
-
-Utilities to prettify console output of tables, lists, text, etc.
+Utilities to prettify console output of tables, lists, progress-bars, text, etc.
 
 ## Table
 
@@ -26,7 +26,7 @@ Pretty-print tables into ASCII/Unicode strings.
 
 <img src="table/images/table-StyleColoredBright.png" width="640px"/>
 
-Detailed documentation can be found here: [table/](table)
+More details can be found here: [table/](table)
 
 ## List
 
@@ -44,7 +44,7 @@ Pretty-print lists with multiple levels/indents into ASCII/Unicode strings.
    ■ The Gunslinger
 ```
 
-Detailed documentation can be found here: [list/](list)
+More details can be found here: [list/](list)
 
 # Progress
 
@@ -65,7 +65,7 @@ Downloading File    #  9 ... 32.1% (●●●●●●●○◌◌◌◌◌◌�
 Transferring Amount # 10 ... 13.0% (●●○◌◌◌◌◌◌◌◌◌◌◌◌◌◌◌◌◌◌◌◌) [£32.50K in 198.84ms]
 ```
 
-Detailed documentation can be found here: [progress/](progress)
+More details can be found here: [progress/](progress)
 
 ## Text
 
@@ -92,12 +92,39 @@ should also have examples for all the available functions.
 
 ## Benchmarks
 
-Partial output of `make bench`:
+Partial output of `make bench` on CI:
 ```
-BenchmarkList_Render-8            	  200000	      5443 ns/op	     872 B/op	      47 allocs/op
-BenchmarkProgress_Render-8        	       5	 300630230 ns/op	    4060 B/op	      90 allocs/op
-BenchmarkTable_Render-8           	   20000	     73939 ns/op	    6067 B/op	     197 allocs/op
-BenchmarkTable_RenderCSV-8        	  100000	     18680 ns/op	    2977 B/op	      54 allocs/op
-BenchmarkTable_RenderHTML-8       	   50000	     27565 ns/op	    4450 B/op	      53 allocs/op
-BenchmarkTable_RenderMarkdown-8   	  100000	     20612 ns/op	    2913 B/op	      52 allocs/op
+BenchmarkList_Render-2            	  372352	      3179 ns/op	     856 B/op	      38 allocs/op
+BenchmarkProgress_Render-2        	       4	 300318682 ns/op	    3438 B/op	      87 allocs/op
+BenchmarkTable_Render-2           	   27208	     44154 ns/op	    5616 B/op	     179 allocs/op
+BenchmarkTable_RenderCSV-2        	  108732	     11059 ns/op	    2624 B/op	      46 allocs/op
+BenchmarkTable_RenderHTML-2       	   88633	     13425 ns/op	    4080 B/op	      45 allocs/op
+BenchmarkTable_RenderMarkdown-2   	  107420	     10991 ns/op	    2560 B/op	      44 allocs/op
+```
+
+## v6.0.0++
+
+If you are using a version of this library older than `v6.0.0` and want to move
+to a newer version of this library, you'd have to modify the import paths from
+something like:
+```golang
+    "github.com/jedib0t/go-pretty/list"
+    "github.com/jedib0t/go-pretty/progress"
+    "github.com/jedib0t/go-pretty/table"
+    "github.com/jedib0t/go-pretty/text"
+```
+to:
+```golang
+    "github.com/jedib0t/go-pretty/v6/list"
+    "github.com/jedib0t/go-pretty/v6/progress"
+    "github.com/jedib0t/go-pretty/v6/table"
+    "github.com/jedib0t/go-pretty/v6/text"
+```
+
+I'd recommend you fire up your favorite IDE and do a mass search and replace for
+all occurrences of `jedib0t/go-pretty/` to `jedib0t/go-pretty/v6/`. If you are
+on a system with access to `find`, `grep`, `xargs` and `sed`, you could just run
+the following from within your code folder to do the same:
+```
+find . -type f -name "*.go" | grep -v vendor | xargs sed -i 's/jedib0t\/go-pretty\//jedib0t\/go-pretty\/v6\//'g
 ```

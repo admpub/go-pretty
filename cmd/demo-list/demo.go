@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/admpub/go-pretty/list"
-	"github.com/admpub/go-pretty/text"
+	"github.com/admpub/go-pretty/v6/list"
+	"github.com/admpub/go-pretty/v6/text"
 )
 
 func demoPrint(title string, content string, prefix string) {

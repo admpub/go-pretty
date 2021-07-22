@@ -5,17 +5,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/admpub/go-pretty/list"
-	"github.com/admpub/go-pretty/progress"
-	"github.com/admpub/go-pretty/table"
-	"github.com/admpub/go-pretty/text"
+	"github.com/admpub/go-pretty/v6/list"
+	"github.com/admpub/go-pretty/v6/progress"
+	"github.com/admpub/go-pretty/v6/table"
 )
 
 var (
 	listItem1      = "Game Of Thrones"
 	listItems2     = []interface{}{"Winter", "Is", "Coming"}
 	listItems3     = []interface{}{"This", "Is", "Known"}
-	tableRowAlign  = []text.Align{text.AlignDefault, text.AlignLeft, text.AlignCenter, text.AlignRight}
 	tableCaption   = "table-caption"
 	tableRowFooter = table.Row{"", "", "Total", 10000}
 	tableRowHeader = table.Row{"#", "First Name", "Last Name", "Salary"}
@@ -24,7 +22,7 @@ var (
 		{20, "Jon", "Snow", 2000, "You know nothing, Jon Snow!"},
 		{300, "Tyrion", "Lannister", 5000},
 	}
-	tracker1 = progress.Tracker{Message: "Calculation Total   # 1", Total: 1000, Units: progress.UnitsDefault}
+	tracker1 = progress.Tracker{Message: "Calculating Total   # 1", Total: 1000, Units: progress.UnitsDefault}
 	tracker2 = progress.Tracker{Message: "Downloading File    # 2", Total: 1000, Units: progress.UnitsBytes}
 	tracker3 = progress.Tracker{Message: "Transferring Amount # 3", Total: 1000, Units: progress.UnitsCurrencyDollar}
 )
@@ -68,7 +66,6 @@ func generateBenchmarkTable() table.Writer {
 	tw.AppendHeader(tableRowHeader)
 	tw.AppendRows(tableRows)
 	tw.AppendFooter(tableRowFooter)
-	tw.SetAlign(tableRowAlign)
 	tw.SetCaption(tableCaption)
 	return tw
 }

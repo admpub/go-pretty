@@ -9,7 +9,7 @@ Output of `go run cmd/demo-table/demo.go`:
 Simple Table with 3 Rows.
 
 +---+-----+--------+-----------+------+-----------------------------+
-|   |  A  |    B   |     C     |   D  |              E              |
+|   |   A |    B   |     C     |    D |              E              |
 +---+-----+--------+-----------+------+-----------------------------+
 | 1 |   1 | Arya   | Stark     | 3000 |                             |
 | 2 |  20 | Jon    | Snow      | 2000 | You know nothing, Jon Snow! |
@@ -24,7 +24,7 @@ Table with Auto-Indexing.
 | 2 |  20 | Jon        | Snow      |   2000 | You know nothing, Jon Snow! |
 | 3 | 300 | Tyrion     | Lannister |   5000 |                             |
 +---+-----+------------+-----------+--------+-----------------------------+
-Table with Auto-Indexing Columns.
+Table with Auto-Indexing (columns-only).
 
 +-----+------------+-----------+--------+-----------------------------+
 |   # | FIRST NAME | LAST NAME | SALARY |                             |
@@ -108,6 +108,18 @@ Table with a Multi-line Row with VAlign.
 |     |            | TOTAL     |  10000 |                             |
 +-----+------------+-----------+--------+-----------------------------+
 Table with a Multi-line Row with VAlign and changed Align.
+
++-----+------------+-----------+--------+-----------------------------+
+|   # | FIRST NAME | LAST NAME | SALARY |                             |
++-----+------------+-----------+--------+-----------------------------+
+|   1 |       Arya | Stark     |   3000 |                             |
+|  20 |        Jon | Snow      |   2000 | You know nothing, Jon Snow! |
++-----+------------+-----------+--------+-----------------------------+
+| 300 |     Tyrion | Lannister |   5000 |                             |
++-----+------------+-----------+--------+-----------------------------+
+|     |            | TOTAL     |  10000 |                             |
++-----+------------+-----------+--------+-----------------------------+
+Simple Table with 3 Rows and a Separator in-between.
 
 +-----+------------+-----------+--------+-----------------------------+
 |   # | FIRST NAME | LAST NAME | SALARY |                             |
@@ -284,6 +296,7 @@ Table with Borders Everywhere!
 [CSV] (c) No one!
 
 [HTML] <table class="go-pretty-table">
+[HTML]   <caption class="title">Unite!</caption>
 [HTML]   <thead>
 [HTML]   <tr>
 [HTML]     <th align="right">#</th>
@@ -325,6 +338,7 @@ Table with Borders Everywhere!
 [HTML]     <td>&nbsp;</td>
 [HTML]   </tr>
 [HTML]   </tfoot>
+[HTML]   <caption class="caption" style="caption-side: bottom;">(c) No one!</caption>
 [HTML] </table>
 
 [Markdown] # Unite!

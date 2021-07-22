@@ -7,12 +7,12 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/admpub/go-pretty/progress"
+	"github.com/admpub/go-pretty/v6/progress"
 	"github.com/pkg/profile"
 )
 
 var (
-	tracker1  = progress.Tracker{Message: "Calculation Total   # 1", Total: 1000, Units: progress.UnitsDefault}
+	tracker1  = progress.Tracker{Message: "Calculating Total   # 1", Total: 1000, Units: progress.UnitsDefault}
 	tracker2  = progress.Tracker{Message: "Downloading File    # 2", Total: 1000, Units: progress.UnitsBytes}
 	tracker3  = progress.Tracker{Message: "Transferring Amount # 3", Total: 1000, Units: progress.UnitsCurrencyDollar}
 	profilers = []func(*profile.Profile){
