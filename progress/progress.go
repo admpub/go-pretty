@@ -1,11 +1,14 @@
 package progress
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"sync"
 	"time"
 	"unicode/utf8"
+
+	"github.com/jedib0t/go-pretty/v6/text"
 )
 
 var (
@@ -21,21 +24,21 @@ var (
 type Progress struct {
 	autoStop              bool
 	done                  chan bool
-	lengthTracker         int
 	lengthProgress        int
-	outputWriter          io.Writer
-	hideTime              bool
-	hideTracker           bool
-	hideValue             bool
-	hidePercentage        bool
+	lengthProgressOverall int
+	lengthTracker         int
+	logsToRender          []string
+	logsToRenderMutex     sync.RWMutex
 	messageWidth          int
 	numTrackersExpected   int64
+	outputWriter          io.Writer
 	overallTracker        *Tracker
 	overallTrackerMutex   sync.RWMutex
+	pinnedMessages        []string
+	pinnedMessageMutex    sync.RWMutex
+	pinnedMessageNumLines int
 	renderInProgress      bool
 	renderInProgressMutex sync.RWMutex
-	showETA               bool
-	showOverallTracker    bool
 	sortBy                SortBy
 	style                 *Style
 	trackerPosition       Position
@@ -65,8 +68,9 @@ const (
 // cycle.
 func (p *Progress) AppendTracker(t *Tracker) {
 	t.start()
-
 	p.overallTrackerMutex.Lock()
+	defer p.overallTrackerMutex.Unlock()
+
 	if p.overallTracker == nil {
 		p.overallTracker = &Tracker{Total: 1}
 		if p.numTrackersExpected > 0 {
@@ -74,15 +78,14 @@ func (p *Progress) AppendTracker(t *Tracker) {
 		}
 		p.overallTracker.start()
 	}
+
+	// append the tracker to the "in-queue" list
 	p.trackersInQueueMutex.Lock()
 	p.trackersInQueue = append(p.trackersInQueue, t)
 	p.trackersInQueueMutex.Unlock()
-	p.overallTracker.mutex.Lock()
-	if p.overallTracker.Total < int64(p.Length())*100 {
-		p.overallTracker.Total = int64(p.Length()) * 100
-	}
-	p.overallTracker.mutex.Unlock()
-	p.overallTrackerMutex.Unlock()
+
+	// update the expected total progress since we are appending a new tracker
+	p.overallTracker.UpdateTotal(int64(p.Length()) * 100)
 }
 
 // AppendTrackers appends one or more Trackers for tracking.
@@ -144,6 +147,17 @@ func (p *Progress) LengthInQueue() int {
 	return out
 }
 
+// Log appends a log to display above the active progress bars during the next
+// refresh.
+func (p *Progress) Log(msg string, a ...interface{}) {
+	if len(a) > 0 {
+		msg = fmt.Sprintf(msg, a...)
+	}
+	p.logsToRenderMutex.Lock()
+	p.logsToRender = append(p.logsToRender, msg)
+	p.logsToRenderMutex.Unlock()
+}
+
 // SetAutoStop toggles the auto-stop functionality. Auto-stop set to true would
 // mean that the Render() function will automatically stop once all currently
 // active Trackers reach their final states. When set to false, the client code
@@ -170,6 +184,16 @@ func (p *Progress) SetNumTrackersExpected(numTrackers int) {
 // may not work well as the Render() logic moves the cursor around a lot.
 func (p *Progress) SetOutputWriter(writer io.Writer) {
 	p.outputWriter = writer
+}
+
+// SetPinnedMessages sets message(s) pinned above all the trackers of the
+// progress bar. This method can be used to overwrite all the pinned messages.
+// Call this function without arguments to "clear" the pinned messages.
+func (p *Progress) SetPinnedMessages(messages ...string) {
+	p.pinnedMessageMutex.Lock()
+	defer p.pinnedMessageMutex.Unlock()
+
+	p.pinnedMessages = messages
 }
 
 // SetSortBy defines the sorting mechanism to use to sort the Active Trackers
@@ -202,33 +226,39 @@ func (p *Progress) SetUpdateFrequency(frequency time.Duration) {
 }
 
 // ShowETA toggles showing the ETA for all individual trackers.
+// Deprecated: in favor of Style().Visibility.ETA
 func (p *Progress) ShowETA(show bool) {
-	p.showETA = show
+	p.Style().Visibility.ETA = show
 }
 
 // ShowPercentage toggles showing the Percent complete for each Tracker.
+// Deprecated: in favor of Style().Visibility.Percentage
 func (p *Progress) ShowPercentage(show bool) {
-	p.hidePercentage = !show
+	p.Style().Visibility.Percentage = show
 }
 
 // ShowOverallTracker toggles showing the Overall progress tracker with an ETA.
+// Deprecated: in favor of Style().Visibility.TrackerOverall
 func (p *Progress) ShowOverallTracker(show bool) {
-	p.showOverallTracker = show
+	p.Style().Visibility.TrackerOverall = show
 }
 
 // ShowTime toggles showing the Time taken by each Tracker.
+// Deprecated: in favor of Style().Visibility.Time
 func (p *Progress) ShowTime(show bool) {
-	p.hideTime = !show
+	p.Style().Visibility.Time = show
 }
 
 // ShowTracker toggles showing the Tracker (the progress bar).
+// Deprecated: in favor of Style().Visibility.Tracker
 func (p *Progress) ShowTracker(show bool) {
-	p.hideTracker = !show
+	p.Style().Visibility.Tracker = show
 }
 
 // ShowValue toggles showing the actual Value of the Tracker.
+// Deprecated: in favor of Style().Visibility.Value
 func (p *Progress) ShowValue(show bool) {
-	p.hideValue = !show
+	p.Style().Visibility.Value = show
 }
 
 // Stop stops the Render() logic that is in progress.
@@ -250,6 +280,9 @@ func (p *Progress) Style() *Style {
 func (p *Progress) initForRender() {
 	// pick a default style
 	p.Style()
+	if p.style.Options.SpeedOverallFormatter == nil {
+		p.style.Options.SpeedOverallFormatter = FormatNumber
+	}
 
 	// reset the signals
 	p.done = make(chan bool, 1)
@@ -259,11 +292,17 @@ func (p *Progress) initForRender() {
 		p.lengthTracker = DefaultLengthTracker
 	}
 
-	// calculate length of the actual progress bar by discount the left/right
+	// calculate length of the actual progress bar by discounting the left/right
 	// border/box chars
 	p.lengthProgress = p.lengthTracker -
 		utf8.RuneCountInString(p.style.Chars.BoxLeft) -
 		utf8.RuneCountInString(p.style.Chars.BoxRight)
+	p.lengthProgressOverall = p.messageWidth +
+		text.RuneWidthWithoutEscSequences(p.style.Options.Separator) +
+		p.lengthProgress + 1
+	if p.style.Visibility.Percentage {
+		p.lengthProgressOverall += text.RuneWidthWithoutEscSequences(fmt.Sprintf(p.style.Options.PercentFormat, 0.0))
+	}
 
 	// if not output write has been set, output to STDOUT
 	if p.outputWriter == nil {

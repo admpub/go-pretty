@@ -2,7 +2,6 @@ package table
 
 import (
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/admpub/go-pretty/v6/text"
@@ -27,7 +26,8 @@ func TestTable_RenderHTML(t *testing.T) {
 		Format: text.FormatTitle,
 	}
 
-	expectedOut := `<table class="go-pretty-table">
+	compareOutput(t, tw.RenderHTML(), `
+<table class="go-pretty-table">
   <caption class="title" align="left" class="bg-black bold fg-hi-blue">Game Of Thrones</caption>
   <thead>
   <tr>
@@ -78,9 +78,7 @@ func TestTable_RenderHTML(t *testing.T) {
   </tr>
   </tfoot>
   <caption class="caption" style="caption-side: bottom;">A Song of Ice and Fire</caption>
-</table>`
-
-	assert.Equal(t, expectedOut, tw.RenderHTML())
+</table>`)
 }
 
 func TestTable_RenderHTML_AutoIndex(t *testing.T) {
@@ -99,11 +97,12 @@ func TestTable_RenderHTML_AutoIndex(t *testing.T) {
 		}
 		tw.AppendFooter(row)
 	}
-	tw.SetOutputMirror(os.Stdout)
+	tw.SetOutputMirror(nil)
 	tw.SetAutoIndex(true)
 	tw.SetStyle(StyleLight)
 
-	expectedOut := `<table class="go-pretty-table">
+	compareOutput(t, tw.RenderHTML(), `
+<table class="go-pretty-table">
   <thead>
   <tr>
     <th>&nbsp;</th>
@@ -140,8 +139,7 @@ func TestTable_RenderHTML_AutoIndex(t *testing.T) {
     <td>CF</td>
   </tr>
   </tfoot>
-</table>`
-	assert.Equal(t, expectedOut, tw.RenderHTML())
+</table>`)
 }
 
 func TestTable_RenderHTML_Colored(t *testing.T) {
@@ -182,7 +180,8 @@ func TestTable_RenderHTML_Colored(t *testing.T) {
 		},
 	})
 
-	expectedOut := `<table class="go-pretty-table-colored">
+	compareOutput(t, tw.RenderHTML(), `
+<table class="go-pretty-table-colored">
   <caption class="title">Game of Thrones</caption>
   <thead>
   <tr>
@@ -233,8 +232,7 @@ func TestTable_RenderHTML_Colored(t *testing.T) {
   </tr>
   </tfoot>
   <caption class="caption" style="caption-side: bottom;">A Song of Ice and Fire</caption>
-</table>`
-	assert.Equal(t, expectedOut, tw.RenderHTML())
+</table>`)
 }
 
 func TestTable_RenderHTML_CustomStyle(t *testing.T) {
@@ -251,9 +249,10 @@ func TestTable_RenderHTML_CustomStyle(t *testing.T) {
 		EscapeText:  false,
 		Newline:     "<!-- newline -->",
 	}
-	tw.SetOutputMirror(os.Stdout)
+	tw.SetOutputMirror(nil)
 
-	expectedOut := `<table class="game-of-thrones">
+	compareOutput(t, tw.RenderHTML(), `
+<table class="game-of-thrones">
   <thead>
   <tr>
     <th><!-- test -->&nbsp;</th>
@@ -300,8 +299,7 @@ func TestTable_RenderHTML_CustomStyle(t *testing.T) {
     <td><!-- test -->&nbsp;</td>
   </tr>
   </tfoot>
-</table>`
-	assert.Equal(t, expectedOut, tw.RenderHTML())
+</table>`)
 }
 
 func TestTable_RenderHTML_Empty(t *testing.T) {
@@ -323,14 +321,14 @@ func TestTable_RenderHTML_HiddenColumns(t *testing.T) {
 	t.Run("every column hidden", func(t *testing.T) {
 		tw.SetColumnConfigs(generateColumnConfigsWithHiddenColumns([]int{0, 1, 2, 3, 4}))
 
-		expectedOut := ``
-		assert.Equal(t, expectedOut, tw.RenderHTML())
+		compareOutput(t, tw.RenderHTML(), "")
 	})
 
 	t.Run("first column hidden", func(t *testing.T) {
 		tw.SetColumnConfigs(generateColumnConfigsWithHiddenColumns([]int{0}))
 
-		expectedOut := `<table class="go-pretty-table">
+		compareOutput(t, tw.RenderHTML(), `
+<table class="go-pretty-table">
   <thead>
   <tr>
     <th>First Name</th>
@@ -367,14 +365,14 @@ func TestTable_RenderHTML_HiddenColumns(t *testing.T) {
     <td>&nbsp;</td>
   </tr>
   </tfoot>
-</table>`
-		assert.Equal(t, expectedOut, tw.RenderHTML())
+</table>`)
 	})
 
 	t.Run("column hidden in the middle", func(t *testing.T) {
 		tw.SetColumnConfigs(generateColumnConfigsWithHiddenColumns([]int{1}))
 
-		expectedOut := `<table class="go-pretty-table">
+		compareOutput(t, tw.RenderHTML(), `
+<table class="go-pretty-table">
   <thead>
   <tr>
     <th align="right">#</th>
@@ -411,14 +409,14 @@ func TestTable_RenderHTML_HiddenColumns(t *testing.T) {
     <td>&nbsp;</td>
   </tr>
   </tfoot>
-</table>`
-		assert.Equal(t, expectedOut, tw.RenderHTML())
+</table>`)
 	})
 
 	t.Run("last column hidden", func(t *testing.T) {
 		tw.SetColumnConfigs(generateColumnConfigsWithHiddenColumns([]int{4}))
 
-		expectedOut := `<table class="go-pretty-table">
+		compareOutput(t, tw.RenderHTML(), `
+<table class="go-pretty-table">
   <thead>
   <tr>
     <th align="right">#</th>
@@ -455,8 +453,7 @@ func TestTable_RenderHTML_HiddenColumns(t *testing.T) {
     <td align="right">10000</td>
   </tr>
   </tfoot>
-</table>`
-		assert.Equal(t, expectedOut, tw.RenderHTML())
+</table>`)
 	})
 }
 
@@ -468,7 +465,8 @@ func TestTable_RenderHTML_Sorted(t *testing.T) {
 	tw.AppendFooter(testFooter)
 	tw.SortBy([]SortBy{{Name: "Last Name", Mode: Asc}, {Name: "First Name", Mode: Asc}})
 
-	expectedOut := `<table class="go-pretty-table">
+	compareOutput(t, tw.RenderHTML(), `
+<table class="go-pretty-table">
   <thead>
   <tr>
     <th align="right">#</th>
@@ -517,6 +515,5 @@ func TestTable_RenderHTML_Sorted(t *testing.T) {
     <td>&nbsp;</td>
   </tr>
   </tfoot>
-</table>`
-	assert.Equal(t, expectedOut, tw.RenderHTML())
+</table>`)
 }

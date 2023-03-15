@@ -87,6 +87,14 @@ func TestProgress_LengthInQueue(t *testing.T) {
 	assert.Equal(t, 1, p.LengthInQueue())
 }
 
+func TestProgress_Log(t *testing.T) {
+	p := Progress{}
+	assert.Len(t, p.logsToRender, 0)
+
+	p.Log("testing log")
+	assert.Len(t, p.logsToRender, 1)
+}
+
 func TestProgress_SetAutoStop(t *testing.T) {
 	p := Progress{}
 	assert.False(t, p.autoStop)
@@ -109,6 +117,14 @@ func TestProgress_SetOutputWriter(t *testing.T) {
 
 	p.SetOutputWriter(os.Stdout)
 	assert.Equal(t, os.Stdout, p.outputWriter)
+}
+
+func TestProgress_SetPinnedMessages(t *testing.T) {
+	p := Progress{}
+	assert.Nil(t, p.pinnedMessages)
+
+	p.SetPinnedMessages("pin1", "pin2")
+	assert.Equal(t, []string{"pin1", "pin2"}, p.pinnedMessages)
 }
 
 func TestProgress_SetSortBy(t *testing.T) {
@@ -157,44 +173,52 @@ func TestProgress_SetUpdateFrequency(t *testing.T) {
 	assert.Equal(t, time.Duration(time.Second), p.updateFrequency)
 }
 
+func TestProgress_ShowETA(t *testing.T) {
+	p := Progress{}
+	assert.False(t, p.Style().Visibility.ETA)
+
+	p.ShowETA(true)
+	assert.True(t, p.Style().Visibility.ETA)
+}
+
 func TestProgress_ShowOverallTracker(t *testing.T) {
 	p := Progress{}
-	assert.False(t, p.showOverallTracker)
+	assert.False(t, p.Style().Visibility.TrackerOverall)
 
 	p.ShowOverallTracker(true)
-	assert.True(t, p.showOverallTracker)
+	assert.True(t, p.Style().Visibility.TrackerOverall)
 }
 
 func TestProgress_ShowPercentage(t *testing.T) {
 	p := Progress{}
-	assert.False(t, p.hidePercentage)
+	assert.True(t, p.Style().Visibility.Percentage)
 
 	p.ShowPercentage(false)
-	assert.True(t, p.hidePercentage)
+	assert.False(t, p.Style().Visibility.Percentage)
 }
 
 func TestProgress_ShowTime(t *testing.T) {
 	p := Progress{}
-	assert.False(t, p.hideTime)
+	assert.True(t, p.Style().Visibility.Time)
 
 	p.ShowTime(false)
-	assert.True(t, p.hideTime)
+	assert.False(t, p.Style().Visibility.Time)
 }
 
 func TestProgress_ShowTracker(t *testing.T) {
 	p := Progress{}
-	assert.False(t, p.hideTracker)
+	assert.True(t, p.Style().Visibility.Tracker)
 
 	p.ShowTracker(false)
-	assert.True(t, p.hideTracker)
+	assert.False(t, p.Style().Visibility.Tracker)
 }
 
 func TestProgress_ShowValue(t *testing.T) {
 	p := Progress{}
-	assert.False(t, p.hideValue)
+	assert.True(t, p.Style().Visibility.Value)
 
 	p.ShowValue(false)
-	assert.True(t, p.hideValue)
+	assert.False(t, p.Style().Visibility.Value)
 }
 
 func TestProgress_Stop(t *testing.T) {
@@ -213,4 +237,12 @@ func TestProgress_Style(t *testing.T) {
 
 	assert.NotNil(t, p.Style())
 	assert.Equal(t, StyleDefault.Name, p.Style().Name)
+}
+
+func TestProgress_OverallTrackerDisappearsCase(t *testing.T) {
+	p := &Progress{}
+	p.overallTracker = &Tracker{Total: 1, done: true}
+	p.AppendTracker(&Tracker{Total: 1})
+
+	assert.Equal(t, false, p.overallTracker.IsDone())
 }

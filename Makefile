@@ -5,8 +5,7 @@ default: test
 all: test bench
 
 tools:
-	go get github.com/fzipp/gocyclo
-	go get golang.org/x/lint/golint
+	go install github.com/fzipp/gocyclo/cmd/gocyclo@v0.5.1
 
 bench:
 	go test -bench=. -benchmem
@@ -26,13 +25,10 @@ demo-table:
 fmt:
 	go fmt $(shell go list ./...)
 
-lint:
-	golint -set_exit_status $(shell go list ./...)
-
 profile:
 	sh profile.sh
 
-test: fmt lint vet cyclo
+test: fmt vet cyclo
 	go test -cover -coverprofile=.coverprofile $(shell go list ./...)
 
 test-race:

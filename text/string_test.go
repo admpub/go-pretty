@@ -50,6 +50,12 @@ func TestInsertEveryN(t *testing.T) {
 	assert.Equal(t, "\x1b[33mGho-st\x1b[0m", InsertEveryN("\x1b[33mGhost\x1b[0m", '-', 3))
 	assert.Equal(t, "\x1b[33mGhos-t\x1b[0m", InsertEveryN("\x1b[33mGhost\x1b[0m", '-', 4))
 	assert.Equal(t, "\x1b[33mGhost\x1b[0m", InsertEveryN("\x1b[33mGhost\x1b[0m", '-', 5))
+	assert.Equal(t, "G\x1b]8;;http://example.com\x1b\\-h-o-s-t\x1b]8;;\x1b\\", InsertEveryN("G\x1b]8;;http://example.com\x1b\\host\x1b]8;;\x1b\\", '-', 1))
+	assert.Equal(t, "\x1b]8;;http://example.com\x1b\\G-h-o-s-t\x1b]8;;\x1b\\", InsertEveryN("\x1b]8;;http://example.com\x1b\\Ghost\x1b]8;;\x1b\\", '-', 1))
+	assert.Equal(t, "\x1b]8;;http://example.com\x1b\\G-h-o-s\x1b]8;;\x1b\\-t", InsertEveryN("\x1b]8;;http://example.com\x1b\\Ghos\x1b]8;;\x1b\\t", '-', 1))
+	assert.Equal(t, "\x1b]8;;http://example.com\x1b\\Gツhツoツsツt\x1b]8;;\x1b\\", InsertEveryN("\x1b]8;;http://example.com\x1b\\Ghost\x1b]8;;\x1b\\", 'ツ', 1))
+	assert.Equal(t, "\x1b]8;;http://example.com\x1b\\Ghツosツt\x1b]8;;\x1b\\", InsertEveryN("\x1b]8;;http://example.com\x1b\\Ghost\x1b]8;;\x1b\\", 'ツ', 2))
+	assert.Equal(t, "\x1b]8;;http://example.com\x1b\\Ghost\x1b]8;;\x1b\\", InsertEveryN("\x1b]8;;http://example.com\x1b\\Ghost\x1b]8;;\x1b\\", '-', 5))
 }
 
 func ExampleLongestLineLen() {
@@ -78,6 +84,28 @@ func TestLongestLineLen(t *testing.T) {
 	assert.Equal(t, 6, LongestLineLen("Winter\nIs\nComing"))
 	assert.Equal(t, 7, LongestLineLen("Mother\nOf\nDragons"))
 	assert.Equal(t, 7, LongestLineLen("\x1b[33mMother\x1b[0m\nOf\nDragons"))
+	assert.Equal(t, 7, LongestLineLen("Mother\nOf\n\x1b]8;;http://example.com\x1b\\Dragons\x1b]8;;\x1b\\"))
+}
+
+func TestOverrideRuneWidthEastAsianWidth(t *testing.T) {
+	originalValue := rwCondition.EastAsianWidth
+	defer func() {
+		rwCondition.EastAsianWidth = originalValue
+	}()
+
+	OverrideRuneWidthEastAsianWidth(true)
+	assert.Equal(t, 2, RuneWidthWithoutEscSequences("╋"))
+	OverrideRuneWidthEastAsianWidth(false)
+	assert.Equal(t, 1, RuneWidthWithoutEscSequences("╋"))
+
+	// Note for posterity. We want the length of the box drawing character to
+	// be reported as 1. However, with an environment where LANG is set to
+	// something like 'zh_CN.UTF-8', the value being returned is 2, which breaks
+	// text alignment/padding logic in this library.
+	//
+	// If a future version of runewidth is able to address this internally and
+	// return 1 for the above, the function being tested can be marked for
+	// deprecation.
 }
 
 func ExamplePad() {
@@ -102,6 +130,8 @@ func TestPad(t *testing.T) {
 	assert.Equal(t, "Ghost.....", Pad("Ghost", 10, '.'))
 	assert.Equal(t, "\x1b[33mGhost\x1b[0  ", Pad("\x1b[33mGhost\x1b[0", 7, ' '))
 	assert.Equal(t, "\x1b[33mGhost\x1b[0.....", Pad("\x1b[33mGhost\x1b[0", 10, '.'))
+	assert.Equal(t, "\x1b]8;;http://example.com\x1b\\Ghost\x1b]8;;\x1b\\  ", Pad("\x1b]8;;http://example.com\x1b\\Ghost\x1b]8;;\x1b\\", 7, ' '))
+	assert.Equal(t, "\x1b]8;;http://example.com\x1b\\Ghost\x1b]8;;\x1b\\.....", Pad("\x1b]8;;http://example.com\x1b\\Ghost\x1b]8;;\x1b\\", 10, '.'))
 }
 
 func ExampleRepeatAndTrim() {
@@ -150,6 +180,7 @@ func TestRuneCount(t *testing.T) {
 	assert.Equal(t, 7, RuneCount("Ghostツ"))
 	assert.Equal(t, 5, RuneCount("\x1b[33mGhost\x1b[0m"))
 	assert.Equal(t, 5, RuneCount("\x1b[33mGhost\x1b[0"))
+	assert.Equal(t, 5, RuneCount("\x1b]8;;http://example.com\x1b\\Ghost\x1b]8;;\x1b\\"))
 }
 
 func ExampleRuneWidth() {
@@ -172,6 +203,29 @@ func TestRuneWidth(t *testing.T) {
 	assert.Equal(t, 1, RuneWidth('⊙'))
 	assert.Equal(t, 2, RuneWidth('︿'))
 	assert.Equal(t, 0, RuneWidth(rune(27))) // ANSI escape sequence
+}
+
+func ExampleRuneWidthWithoutEscSequences() {
+	fmt.Printf("RuneWidthWithoutEscSequences(\"\"): %d\n", RuneWidthWithoutEscSequences(""))
+	fmt.Printf("RuneWidthWithoutEscSequences(\"Ghost\"): %d\n", RuneWidthWithoutEscSequences("Ghost"))
+	fmt.Printf("RuneWidthWithoutEscSequences(\"Ghostツ\"): %d\n", RuneWidthWithoutEscSequences("Ghostツ"))
+	fmt.Printf("RuneWidthWithoutEscSequences(\"\\x1b[33mGhost\\x1b[0m\"): %d\n", RuneWidthWithoutEscSequences("\x1b[33mGhost\x1b[0m"))
+	fmt.Printf("RuneWidthWithoutEscSequences(\"\\x1b[33mGhost\\x1b[0\"): %d\n", RuneWidthWithoutEscSequences("\x1b[33mGhost\x1b[0"))
+
+	// Output: RuneWidthWithoutEscSequences(""): 0
+	// RuneWidthWithoutEscSequences("Ghost"): 5
+	// RuneWidthWithoutEscSequences("Ghostツ"): 7
+	// RuneWidthWithoutEscSequences("\x1b[33mGhost\x1b[0m"): 5
+	// RuneWidthWithoutEscSequences("\x1b[33mGhost\x1b[0"): 5
+}
+
+func TestRuneWidthWithoutEscSequences(t *testing.T) {
+	assert.Equal(t, 0, RuneWidthWithoutEscSequences(""))
+	assert.Equal(t, 5, RuneWidthWithoutEscSequences("Ghost"))
+	assert.Equal(t, 7, RuneWidthWithoutEscSequences("Ghostツ"))
+	assert.Equal(t, 5, RuneWidthWithoutEscSequences("\x1b[33mGhost\x1b[0m"))
+	assert.Equal(t, 5, RuneWidthWithoutEscSequences("\x1b[33mGhost\x1b[0"))
+	assert.Equal(t, 5, RuneWidthWithoutEscSequences("\x1b]8;;http://example.com\x1b\\Ghost\x1b]8;;\x1b\\"))
 }
 
 func ExampleSnip() {
@@ -197,6 +251,9 @@ func TestSnip(t *testing.T) {
 	assert.Equal(t, "Ghost", Snip("Ghost", 5, "~"))
 	assert.Equal(t, "Ghost", Snip("Ghost", 7, "~"))
 	assert.Equal(t, "\x1b[33mGhost\x1b[0m", Snip("\x1b[33mGhost\x1b[0m", 7, "~"))
+	assert.Equal(t, "\x1b]8;;http://example.com\x1b\\Ghost\x1b]8;;\x1b\\", Snip("\x1b]8;;http://example.com\x1b\\Ghost\x1b]8;;\x1b\\", 7, "~"))
+	assert.Equal(t, "\x1b]8;;http://example.com\x1b\\Gh\x1b]8;;\x1b\\~", Snip("\x1b]8;;http://example.com\x1b\\Ghost\x1b]8;;\x1b\\", 3, "~"))
+	assert.Equal(t, "\x1b[33m\x1b]8;;http://example.com\x1b\\Gh\x1b]8;;\x1b\\\x1b[0m~", Snip("\x1b[33m\x1b]8;;http://example.com\x1b\\Ghost\x1b]8;;\x1b\\\x1b[0m", 3, "~"))
 }
 
 func ExampleTrim() {
@@ -221,4 +278,5 @@ func TestTrim(t *testing.T) {
 	assert.Equal(t, "Ghost", Trim("Ghost", 6))
 	assert.Equal(t, "\x1b[33mGho\x1b[0m", Trim("\x1b[33mGhost\x1b[0m", 3))
 	assert.Equal(t, "\x1b[33mGhost\x1b[0m", Trim("\x1b[33mGhost\x1b[0m", 6))
+	assert.Equal(t, "\x1b]8;;http://example.com\x1b\\Gho\x1b]8;;\x1b\\", Trim("\x1b]8;;http://example.com\x1b\\Ghost\x1b]8;;\x1b\\", 3))
 }
