@@ -8,7 +8,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/jedib0t/go-pretty/v6/text"
+	"github.com/admpub/go-pretty/v6/text"
 )
 
 var (
