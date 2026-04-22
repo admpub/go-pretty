@@ -1,12 +1,14 @@
 package table
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"unicode/utf8"
 
 	"github.com/admpub/go-pretty/v6/text"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -19,17 +21,19 @@ var (
 	testFooterMultiLine = Row{"", "", "Total\nSalary", 10000}
 	testHeader          = Row{"#", "First Name", "Last Name", "Salary"}
 	testHeaderMultiLine = Row{"#", "First\nName", "Last\nName", "Salary"}
+	testHeader2         = Row{"ID", "Text1", "Date", "Text2"}
 	testRows            = []Row{
 		{1, "Arya", "Stark", 3000},
 		{20, "Jon", "Snow", 2000, "You know nothing, Jon Snow!"},
 		{300, "Tyrion", "Lannister", 5000},
 	}
-	testRowMultiLine = Row{0, "Winter", "Is", 0, "Coming.\r\nThe North Remembers!\nThis is known."}
-	testRowNewLines  = Row{0, "Valar", "Morghulis", 0, "Faceless\nMen"}
-	testRowPipes     = Row{0, "Valar", "Morghulis", 0, "Faceless|Men"}
-	testRowTabs      = Row{0, "Valar", "Morghulis", 0, "Faceless\tMen"}
-	testTitle1       = "Game of Thrones"
-	testTitle2       = "When you play the Game of Thrones, you win or you die. There is no middle ground."
+	testRowMultiLine    = Row{0, "Winter", "Is", 0, "Coming.\r\nThe North Remembers!\nThis is known."}
+	testRowNewLines     = Row{0, "Valar", "Morghulis", 0, "Faceless\nMen"}
+	testRowPipes        = Row{0, "Valar", "Morghulis", 0, "Faceless|Men"}
+	testRowTabs         = Row{0, "Valar", "Morghulis", 0, "Faceless\tMen"}
+	testRowDoubleQuotes = Row{0, "Valar", "Morghulis", 0, "Faceless\"Men"}
+	testTitle1          = "Game of Thrones"
+	testTitle2          = "When you play the Game of Thrones, you win or you die. There is no middle ground."
 )
 
 func init() {
@@ -148,6 +152,127 @@ func TestTable_AppendRows(t *testing.T) {
 	assert.True(t, table.rowsConfigMap[3].AutoMerge)
 }
 
+func TestTable_ImportGrid(t *testing.T) {
+	t.Run("invalid grid", func(t *testing.T) {
+		table := Table{}
+
+		assert.False(t, table.ImportGrid(nil))
+		require.Len(t, table.rowsRawFiltered, 0)
+
+		assert.False(t, table.ImportGrid(123))
+		require.Len(t, table.rowsRawFiltered, 0)
+
+		assert.False(t, table.ImportGrid("abc"))
+		require.Len(t, table.rowsRawFiltered, 0)
+
+		assert.False(t, table.ImportGrid(Table{}))
+		require.Len(t, table.rowsRawFiltered, 0)
+
+		assert.False(t, table.ImportGrid(&Table{}))
+		require.Len(t, table.rowsRawFiltered, 0)
+	})
+
+	a, b, c := 1, 2, 3
+	d, e, f := 4, 5, 6
+	g, h, i := 7, 8, 9
+
+	t.Run("valid 1d", func(t *testing.T) {
+		inputs := []interface{}{
+			[3]int{a, b, c},     // array
+			[]int{a, b, c},      // slice
+			&[]int{a, b, c},     // pointer to slice
+			[]*int{&a, &b, &c},  // slice of pointers-to-slices
+			&[]*int{&a, &b, &c}, // pointer to slice of pointers
+		}
+
+		for _, grid := range inputs {
+			message := fmt.Sprintf("grid: %#v", grid)
+
+			table := Table{}
+			table.Style().Options.SeparateRows = true
+			assert.True(t, table.ImportGrid(grid), message)
+			compareOutput(t, table.Render(), `
++---+
+| 1 |
++---+
+| 2 |
++---+
+| 3 |
++---+`, message)
+		}
+	})
+
+	t.Run("valid 2d", func(t *testing.T) {
+		inputs := []interface{}{
+			[3][3]int{{a, b, c}, {d, e, f}, {g, h, i}},           // array of arrays
+			[3][]int{{a, b, c}, {d, e, f}, {g, h, i}},            // array of slices
+			[][]int{{a, b, c}, {d, e, f}, {g, h, i}},             // slice of slices
+			&[][]int{{a, b, c}, {d, e, f}, {g, h, i}},            // pointer-to-slice of slices
+			[]*[]int{{a, b, c}, {d, e, f}, {g, h, i}},            // slice of pointers-to-slices
+			&[]*[]int{{a, b, c}, {d, e, f}, {g, h, i}},           // pointer-to-slice of pointers-to-slices
+			&[]*[]*int{{&a, &b, &c}, {&d, &e, &f}, {&g, &h, &i}}, // pointer-to-slice of pointers-to-slices of pointers
+		}
+
+		for _, grid := range inputs {
+			message := fmt.Sprintf("grid: %#v", grid)
+
+			table := Table{}
+			table.Style().Options.SeparateRows = true
+			assert.True(t, table.ImportGrid(grid), message)
+			compareOutput(t, table.Render(), `
++---+---+---+
+| 1 | 2 | 3 |
++---+---+---+
+| 4 | 5 | 6 |
++---+---+---+
+| 7 | 8 | 9 |
++---+---+---+`, message)
+		}
+	})
+
+	t.Run("valid 2d with nil rows", func(t *testing.T) {
+		inputs := []interface{}{
+			[]*[]int{{a, b, c}, {d, e, f}, nil},         // slice of pointers-to-slices
+			&[]*[]int{{a, b, c}, {d, e, f}, nil},        // pointer-to-slice of pointers-to-slices
+			&[]*[]*int{{&a, &b, &c}, {&d, &e, &f}, nil}, // pointer-to-slice of pointers-to-slices of pointers
+		}
+
+		for _, grid := range inputs {
+			message := fmt.Sprintf("grid: %#v", grid)
+
+			table := Table{}
+			table.Style().Options.SeparateRows = true
+			assert.True(t, table.ImportGrid(grid), message)
+			compareOutput(t, table.Render(), `
++---+---+---+
+| 1 | 2 | 3 |
++---+---+---+
+| 4 | 5 | 6 |
++---+---+---+`, message)
+		}
+	})
+
+	t.Run("valid 2d with nil columns and rows", func(t *testing.T) {
+		inputs := []interface{}{
+			&[]*[]*int{{&a, &b, &c}, {&d, &e, nil}, nil},
+		}
+
+		for _, grid := range inputs {
+			message := fmt.Sprintf("grid: %#v", grid)
+
+			table := Table{}
+			table.Style().Options.SeparateRows = true
+			assert.True(t, table.ImportGrid(grid), message)
+			compareOutput(t, table.Render(), `
++---+---+---+
+| 1 | 2 | 3 |
++---+---+---+
+| 4 | 5 |   |
++---+---+---+`, message)
+		}
+	})
+}
+
 func TestTable_Length(t *testing.T) {
 	table := Table{}
 	assert.Zero(t, table.Length())
@@ -182,10 +307,10 @@ func TestTable_ResetHeaders(t *testing.T) {
 func TestTable_ResetRows(t *testing.T) {
 	table := Table{}
 	table.AppendRows(testRows)
-	assert.NotEmpty(t, table.rowsRaw)
+	assert.NotEmpty(t, table.rowsRawFiltered)
 
 	table.ResetRows()
-	assert.Empty(t, table.rowsRaw)
+	assert.Empty(t, table.rowsRawFiltered)
 }
 
 func TestTable_SetAllowedRowLength(t *testing.T) {
@@ -326,7 +451,7 @@ func TestTable_SetHTMLCSSClass(t *testing.T) {
 
 	table.SetHTMLCSSClass(testCSSClass)
 	assert.Equal(t, testCSSClass, table.htmlCSSClass)
-	assert.Equal(t, strings.Replace(expectedHTML, DefaultHTMLCSSClass, testCSSClass, -1), table.RenderHTML())
+	assert.Equal(t, strings.ReplaceAll(expectedHTML, DefaultHTMLCSSClass, testCSSClass), table.RenderHTML())
 }
 
 func TestTable_SetOutputMirror(t *testing.T) {
@@ -347,10 +472,10 @@ func TestTable_SetOutputMirror(t *testing.T) {
 
 func TestTable_SePageSize(t *testing.T) {
 	table := Table{}
-	assert.Equal(t, 0, table.pageSize)
+	assert.Equal(t, 0, table.pager.size)
 
 	table.SetPageSize(13)
-	assert.Equal(t, 13, table.pageSize)
+	assert.Equal(t, 13, table.pager.size)
 }
 
 func TestTable_SortByColumn(t *testing.T) {

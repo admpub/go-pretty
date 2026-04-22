@@ -17,32 +17,44 @@ const (
 	AlignCenter               // "   center   "
 	AlignJustify              // "justify   it"
 	AlignRight                // "       right"
+	AlignAuto                 // AlignRight for numbers, AlignLeft for the rest
 )
 
 // Apply aligns the text as directed. For ex.:
-//  * AlignDefault.Apply("Jon Snow", 12) returns "Jon Snow    "
-//  * AlignLeft.Apply("Jon Snow",    12) returns "Jon Snow    "
-//  * AlignCenter.Apply("Jon Snow",  12) returns "  Jon Snow  "
-//  * AlignJustify.Apply("Jon Snow", 12) returns "Jon     Snow"
-//  * AlignRight.Apply("Jon Snow",   12) returns "    Jon Snow"
+//   - AlignDefault.Apply("Jon Snow", 12) returns "Jon Snow    "
+//   - AlignLeft.Apply("Jon Snow",    12) returns "Jon Snow    "
+//   - AlignCenter.Apply("Jon Snow",  12) returns "  Jon Snow  "
+//   - AlignJustify.Apply("Jon Snow", 12) returns "Jon     Snow"
+//   - AlignRight.Apply("Jon Snow",   12) returns "    Jon Snow"
+//   - AlignAuto.Apply("Jon Snow",    12) returns "Jon Snow    "
 func (a Align) Apply(text string, maxLength int) string {
-	text = a.trimString(text)
+	aComputed := a
+	if aComputed == AlignAuto {
+		_, err := strconv.ParseFloat(text, 64)
+		if err == nil { // was able to parse a number out of the string
+			aComputed = AlignRight
+		} else {
+			aComputed = AlignLeft
+		}
+	}
+
+	text = aComputed.trimString(text)
 	sLen := utf8.RuneCountInString(text)
-	sLenWoE := RuneWidthWithoutEscSequences(text)
+	sLenWoE := StringWidthWithoutEscSequences(text)
 	numEscChars := sLen - sLenWoE
 
 	// now, align the text
-	switch a {
+	switch aComputed {
 	case AlignDefault, AlignLeft:
 		return fmt.Sprintf("%-"+strconv.Itoa(maxLength+numEscChars)+"s", text)
 	case AlignCenter:
 		if sLenWoE < maxLength {
 			// left pad with half the number of spaces needed before using %text
 			return fmt.Sprintf("%"+strconv.Itoa(maxLength+numEscChars)+"s",
-				text+strings.Repeat(" ", int((maxLength-sLenWoE)/2)))
+				text+strings.Repeat(" ", (maxLength-sLenWoE)/2))
 		}
 	case AlignJustify:
-		return a.justifyText(text, sLenWoE, maxLength)
+		return justifyText(text, sLenWoE, maxLength)
 	}
 	return fmt.Sprintf("%"+strconv.Itoa(maxLength+numEscChars)+"s", text)
 }
@@ -64,31 +76,64 @@ func (a Align) HTMLProperty() string {
 }
 
 // MarkdownProperty returns the equivalent Markdown horizontal-align separator.
-func (a Align) MarkdownProperty() string {
+// An optional minLength can be provided to extend the dashes to match the
+// column content width; the result will be max(minLength, 3)+2 wide (including
+// leading/trailing space or colon). Without minLength (or 0), it defaults to 3.
+func (a Align) MarkdownProperty(minLength ...int) string {
+	length := 3
+	if len(minLength) > 0 && minLength[0] > length {
+		length = minLength[0]
+	}
+	dashes := strings.Repeat("-", length)
 	switch a {
 	case AlignLeft:
-		return ":--- "
+		return ":" + dashes + " "
 	case AlignCenter:
-		return ":---:"
+		return ":" + dashes + ":"
 	case AlignRight:
-		return " ---:"
+		return " " + dashes + ":"
 	default:
-		return " --- "
+		return " " + dashes + " "
 	}
 }
 
-func (a Align) justifyText(text string, textLength int, maxLength int) string {
+func (a Align) trimString(text string) string {
+	switch a {
+	case AlignDefault, AlignLeft:
+		if strings.HasSuffix(text, " ") {
+			return strings.TrimRight(text, " ")
+		}
+	case AlignRight:
+		if strings.HasPrefix(text, " ") {
+			return strings.TrimLeft(text, " ")
+		}
+	default:
+		if strings.HasPrefix(text, " ") || strings.HasSuffix(text, " ") {
+			return strings.Trim(text, " ")
+		}
+	}
+	return text
+}
+
+func justifyText(text string, textLength int, maxLength int) string {
 	// split the text into individual words
-	wordsUnfiltered := strings.Split(text, " ")
-	words := Filter(wordsUnfiltered, func(item string) bool {
+	words := Filter(strings.Split(text, " "), func(item string) bool {
 		return item != ""
 	})
-	// empty string implies spaces for maxLength
+	// empty string implies result is just spaces for maxLength
 	if len(words) == 0 {
 		return strings.Repeat(" ", maxLength)
 	}
+
 	// get the number of spaces to insert into the text
 	numSpacesNeeded := maxLength - textLength + strings.Count(text, " ")
+	if numSpacesNeeded < 0 {
+		// textLength (display-width) exceeds maxLength; this can happen
+		// when the cell contains wide Unicode characters (e.g. CJK) whose
+		// display width is greater than their rune count. Return the text
+		// as-is; truncation is the caller's responsibility.
+		return text
+	}
 	numSpacesNeededBetweenWords := 0
 	if len(words) > 1 {
 		numSpacesNeededBetweenWords = numSpacesNeeded / (len(words) - 1)
@@ -116,22 +161,4 @@ func (a Align) justifyText(text string, textLength int, maxLength int) string {
 		}
 	}
 	return outText.String()
-}
-
-func (a Align) trimString(text string) string {
-	switch a {
-	case AlignDefault, AlignLeft:
-		if strings.HasSuffix(text, " ") {
-			return strings.TrimRight(text, " ")
-		}
-	case AlignRight:
-		if strings.HasPrefix(text, " ") {
-			return strings.TrimLeft(text, " ")
-		}
-	default:
-		if strings.HasPrefix(text, " ") || strings.HasSuffix(text, " ") {
-			return strings.Trim(text, " ")
-		}
-	}
-	return text
 }

@@ -8,7 +8,7 @@ import (
 )
 
 func TestTracker_ETA(t *testing.T) {
-	timeDelayUnit := time.Millisecond
+	timeDelayUnit := time.Microsecond * 100
 	timeDelay := timeDelayUnit * 25
 
 	tracker := Tracker{}
@@ -66,6 +66,28 @@ func TestTracker_IncrementWithError(t *testing.T) {
 	assert.False(t, tracker.timeStop.IsZero())
 	assert.True(t, tracker.IsErrored())
 	assert.True(t, tracker.IsDone())
+}
+
+func TestTracker_IsStarted(t *testing.T) {
+	tracker := Tracker{DeferStart: true}
+	assert.False(t, tracker.IsStarted())
+	tracker.Start()
+	assert.True(t, tracker.IsStarted())
+
+	tracker = Tracker{DeferStart: true}
+	assert.False(t, tracker.IsStarted())
+	tracker.Increment(1)
+	assert.True(t, tracker.IsStarted())
+
+	tracker = Tracker{DeferStart: true}
+	assert.False(t, tracker.IsStarted())
+	tracker.IncrementWithError(1)
+	assert.True(t, tracker.IsStarted())
+
+	tracker = Tracker{DeferStart: true}
+	assert.False(t, tracker.IsStarted())
+	tracker.SetValue(1)
+	assert.True(t, tracker.IsStarted())
 }
 
 func TestTracker_IsDone(t *testing.T) {

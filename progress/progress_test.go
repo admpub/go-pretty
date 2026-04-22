@@ -1,6 +1,7 @@
 package progress
 
 import (
+	"context"
 	"math"
 	"os"
 	"testing"
@@ -143,6 +144,16 @@ func TestProgress_SetStyle(t *testing.T) {
 	assert.Equal(t, StyleCircle.Name, p.Style().Name)
 }
 
+func TestProgress_SetMessageLength(t *testing.T) {
+	p := Progress{}
+	assert.Equal(t, 0, p.lengthMessage)
+
+	p.SetMessageLength(80)
+	assert.Equal(t, 80, p.lengthMessage)
+	p.SetMessageWidth(81)
+	assert.Equal(t, 81, p.lengthMessage)
+}
+
 func TestProgress_SetTrackerLength(t *testing.T) {
 	p := Progress{}
 	assert.Equal(t, 0, p.lengthTracker)
@@ -169,8 +180,8 @@ func TestProgress_SetUpdateFrequency(t *testing.T) {
 	p.initForRender()
 	assert.Equal(t, DefaultUpdateFrequency, p.updateFrequency)
 
-	p.SetUpdateFrequency(time.Duration(time.Second))
-	assert.Equal(t, time.Duration(time.Second), p.updateFrequency)
+	p.SetUpdateFrequency(time.Second)
+	assert.Equal(t, time.Second, p.updateFrequency)
 }
 
 func TestProgress_ShowETA(t *testing.T) {
@@ -222,13 +233,11 @@ func TestProgress_ShowValue(t *testing.T) {
 }
 
 func TestProgress_Stop(t *testing.T) {
-	doneChannel := make(chan bool, 1)
-
 	p := Progress{}
-	p.done = doneChannel
+	p.renderContext, p.renderContextCancel = context.WithCancel(context.Background())
 	p.renderInProgress = true
 	p.Stop()
-	assert.True(t, <-doneChannel)
+	assert.NotNil(t, <-p.renderContext.Done())
 }
 
 func TestProgress_Style(t *testing.T) {
@@ -245,4 +254,37 @@ func TestProgress_OverallTrackerDisappearsCase(t *testing.T) {
 	p.AppendTracker(&Tracker{Total: 1})
 
 	assert.Equal(t, false, p.overallTracker.IsDone())
+}
+
+func TestProgress_watchTerminalSize(t *testing.T) {
+	p := &Progress{}
+	// Set up a cancellable context for watchTerminalSize
+	p.renderContext, p.renderContextCancel = context.WithCancel(context.Background())
+
+	// Call watchTerminalSize in a goroutine
+	done := make(chan bool)
+	go func() {
+		p.watchTerminalSize()
+		done <- true
+	}()
+
+	// Wait a bit to let the ticker fire at least once (covers case <-ticker.C)
+	time.Sleep(150 * time.Millisecond)
+	p.renderContextCancel()
+
+	// Wait for the goroutine to exit (with timeout)
+	select {
+	case <-done:
+		// Success: goroutine exited after context cancellation
+	case <-time.After(1 * time.Second):
+		t.Fatal("watchTerminalSize goroutine did not exit after context cancellation")
+	}
+
+	// Verify the context was cancelled
+	select {
+	case <-p.renderContext.Done():
+		// Context is cancelled, which is expected
+	default:
+		t.Fatal("Expected context to be cancelled")
+	}
 }

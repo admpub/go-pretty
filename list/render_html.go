@@ -7,23 +7,24 @@ import (
 )
 
 // RenderHTML renders the List in the HTML format. Example:
-//  <ul class="go-pretty-table">
-//    <li>Game Of Thrones</li>
-//    <ul class="go-pretty-table-1">
-//      <li>Winter</li>
-//      <li>Is</li>
-//      <li>Coming</li>
-//      <ul class="go-pretty-table-2">
-//        <li>This</li>
-//        <li>Is</li>
-//        <li>Known</li>
-//      </ul>
-//    </ul>
-//    <li>The Dark Tower</li>
-//    <ul class="go-pretty-table-1">
-//      <li>The Gunslinger</li>
-//    </ul>
-//  </ul>
+//
+//	<ul class="go-pretty-table">
+//	  <li>Game Of Thrones</li>
+//	  <ul class="go-pretty-table-1">
+//	    <li>Winter</li>
+//	    <li>Is</li>
+//	    <li>Coming</li>
+//	    <ul class="go-pretty-table-2">
+//	      <li>This</li>
+//	      <li>Is</li>
+//	      <li>Known</li>
+//	    </ul>
+//	  </ul>
+//	  <li>The Dark Tower</li>
+//	  <ul class="go-pretty-table-1">
+//	    <li>The Gunslinger</li>
+//	  </ul>
+//	</ul>
 func (l *List) RenderHTML() string {
 	l.initForRender()
 
@@ -50,7 +51,7 @@ func (l *List) htmlRenderRecursively(out *strings.Builder, idx int, item *listIt
 		if l.items[itemIdx].Level == item.Level {
 			out.WriteString(linePrefix)
 			out.WriteString("  <li>")
-			out.WriteString(strings.Replace(html.EscapeString(l.items[itemIdx].Text), "\n", "<br/>", -1))
+			out.WriteString(strings.ReplaceAll(html.EscapeString(l.items[itemIdx].Text), "\n", "<br/>"))
 			out.WriteString("</li>\n")
 			numItemsRendered++
 		} else if l.items[itemIdx].Level > item.Level { // indent

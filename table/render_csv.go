@@ -7,13 +7,14 @@ import (
 )
 
 // RenderCSV renders the Table in CSV format. Example:
-//  #,First Name,Last Name,Salary,
-//  1,Arya,Stark,3000,
-//  20,Jon,Snow,2000,"You know nothing\, Jon Snow!"
-//  300,Tyrion,Lannister,5000,
-//  ,,Total,10000,
+//
+//	#,First Name,Last Name,Salary,
+//	1,Arya,Stark,3000,
+//	20,Jon,Snow,2000,"You know nothing\, Jon Snow!"
+//	300,Tyrion,Lannister,5000,
+//	,,Total,10000,
 func (t *Table) RenderCSV() string {
-	t.initForRender()
+	t.initForRender(renderModeCSV)
 
 	var out strings.Builder
 	if t.numColumns > 0 {
@@ -35,11 +36,11 @@ func (t *Table) RenderCSV() string {
 }
 
 func (t *Table) csvFixCommas(str string) string {
-	return strings.Replace(str, ",", "\\,", -1)
+	return strings.ReplaceAll(str, ",", "\\,")
 }
 
 func (t *Table) csvFixDoubleQuotes(str string) string {
-	return strings.Replace(str, "\"", "\\\"", -1)
+	return strings.ReplaceAll(str, "\"", "\\\"")
 }
 
 func (t *Table) csvRenderRow(out *strings.Builder, row rowStr, hint renderHint) {
@@ -53,7 +54,7 @@ func (t *Table) csvRenderRow(out *strings.Builder, row rowStr, hint renderHint) 
 		// auto-index column
 		if colIdx == 0 && t.autoIndex {
 			if hint.isRegularRow() {
-				out.WriteString(fmt.Sprint(hint.rowNumber))
+				fmt.Fprint(out, hint.rowNumber)
 			}
 			out.WriteRune(',')
 		}

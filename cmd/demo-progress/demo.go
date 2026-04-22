@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/admpub/go-pretty/v6/progress"
@@ -12,6 +13,7 @@ import (
 
 var (
 	flagAutoStop           = flag.Bool("auto-stop", false, "Auto-stop rendering?")
+	flagCustomRenderer     = flag.Bool("custom-renderer", false, "Use custom render functions with rainbow colors")
 	flagHideETA            = flag.Bool("hide-eta", false, "Hide the ETA?")
 	flagHideETAOverall     = flag.Bool("hide-eta-overall", false, "Hide the ETA in the overall tracker?")
 	flagHideOverallTracker = flag.Bool("hide-overall", false, "Hide the Overall Tracker?")
@@ -19,11 +21,14 @@ var (
 	flagHideTime           = flag.Bool("hide-time", false, "Hide the time taken?")
 	flagHideValue          = flag.Bool("hide-value", false, "Hide the tracker value?")
 	flagNumTrackers        = flag.Int("num-trackers", 13, "Number of Trackers")
+	flagRandomFail         = flag.Bool("rnd-fail", false, "Introduce random failures in tracking")
+	flagRandomDefer        = flag.Bool("rnd-defer", false, "Introduce random deferred starts")
+	flagRandomRemove       = flag.Bool("rnd-remove", false, "Introduce random remove of trackers on completion")
+	flagRandomLogs         = flag.Bool("rnd-logs", false, "Output random logs in the middle of tracking")
+	flagSortBy             = flag.String("sort-by", "percent-dsc", "Sort trackers by? (none, index, index-dsc, message, message-dsc, percent, percent-dsc, value, value-dsc)")
 	flagShowSpeed          = flag.Bool("show-speed", false, "Show the tracker speed?")
 	flagShowSpeedOverall   = flag.Bool("show-speed-overall", false, "Show the overall tracker speed?")
 	flagShowPinned         = flag.Bool("show-pinned", false, "Show a pinned message?")
-	flagRandomFail         = flag.Bool("rnd-fail", false, "Introduce random failures in tracking")
-	flagRandomLogs         = flag.Bool("rnd-logs", false, "Output random logs in the middle of tracking")
 
 	messageColors = []text.Color{
 		text.FgRed,
@@ -34,8 +39,54 @@ var (
 		text.FgCyan,
 		text.FgWhite,
 	}
+	rng       = rand.New(rand.NewSource(time.Now().UnixNano()))
 	timeStart = time.Now()
 )
+
+// customTrackerDeterminateRenderer creates a progress bar using rainbow colors for determinate progress
+func customTrackerDeterminateRenderer(value int64, total int64, maxLen int) string {
+	progress := float64(value) / float64(total)
+	completed := int(progress * float64(maxLen))
+
+	var result strings.Builder
+	for i := 0; i < maxLen; i++ {
+		if i < completed {
+			// Use rainbow colors based on position in the progress bar
+			colorIdx := (i * 6) / maxLen // Map position to 6 rainbow colors
+			colors := []text.Color{
+				text.FgRed,
+				text.FgYellow,
+				text.FgGreen,
+				text.FgCyan,
+				text.FgBlue,
+				text.FgMagenta,
+			}
+			if colorIdx >= len(colors) {
+				colorIdx = len(colors) - 1
+			}
+			result.WriteString(colors[colorIdx].Sprint("█"))
+		} else {
+			result.WriteString(text.FgHiBlack.Sprint("░"))
+		}
+	}
+
+	return result.String()
+}
+
+// customTrackerIndeterminateRenderer creates a progress bar using rotating rainbow colors for indeterminate progress
+func customTrackerIndeterminateRenderer(maxLen int) string {
+	// For indeterminate progress, use rotating rainbow colors
+	colors := []text.Color{
+		text.FgRed,
+		text.FgYellow,
+		text.FgGreen,
+		text.FgCyan,
+		text.FgBlue,
+		text.FgMagenta,
+	}
+	idx := int(time.Now().UnixNano()/100000000) % len(colors)
+	return colors[idx].Sprint(strings.Repeat("█", maxLen))
+}
 
 func getMessage(idx int64, units *progress.Units) string {
 	var message string
@@ -48,6 +99,31 @@ func getMessage(idx int64, units *progress.Units) string {
 		message = fmt.Sprintf("Calculating Total   #%3d", idx)
 	}
 	return message
+}
+
+func getSortBy() progress.SortBy {
+	switch *flagSortBy {
+	case "none":
+		return progress.SortByNone
+	case "index":
+		return progress.SortByIndex
+	case "index-dsc":
+		return progress.SortByIndexDsc
+	case "message":
+		return progress.SortByMessage
+	case "message-dsc":
+		return progress.SortByMessageDsc
+	case "percent":
+		return progress.SortByPercent
+	case "percent-dsc":
+		return progress.SortByPercentDsc
+	case "value":
+		return progress.SortByValue
+	case "value-dsc":
+		return progress.SortByValueDsc
+	default:
+		return progress.SortByPercentDsc
+	}
 }
 
 func getUnits(idx int64) *progress.Units {
@@ -71,12 +147,24 @@ func trackSomething(pw progress.Writer, idx int64, updateMessage bool) {
 
 	units := getUnits(idx)
 	message := getMessage(idx, units)
-	tracker := progress.Tracker{Message: message, Total: total, Units: *units}
+	tracker := progress.Tracker{
+		DeferStart:         *flagRandomDefer && rng.Float64() < 0.5,
+		Index:              uint64(idx),
+		Message:            message,
+		RemoveOnCompletion: *flagRandomRemove && rng.Float64() < 0.25,
+		Total:              total,
+		Units:              *units,
+	}
 	if idx == int64(*flagNumTrackers) {
 		tracker.Total = 0
 	}
 
 	pw.AppendTracker(&tracker)
+
+	if tracker.DeferStart {
+		time.Sleep(3 * time.Second)
+		tracker.Start()
+	}
 
 	ticker := time.Tick(time.Millisecond * 500)
 	updateTicker := time.Tick(time.Millisecond * 250)
@@ -91,7 +179,7 @@ func trackSomething(pw progress.Writer, idx int64, updateMessage bool) {
 			}
 			pw.SetPinnedMessages(
 				fmt.Sprintf(">> Current Time: %-32s", time.Now().Format(time.RFC3339)),
-				fmt.Sprintf(">>   Total Time: %-32s", time.Now().Sub(timeStart).Round(time.Millisecond)),
+				fmt.Sprintf(">>   Total Time: %-32s", time.Since(timeStart).Round(time.Millisecond)),
 			)
 		case <-updateTicker:
 			if updateMessage {
@@ -112,11 +200,11 @@ func main() {
 	// instantiate a Progress Writer and set up the options
 	pw := progress.NewWriter()
 	pw.SetAutoStop(*flagAutoStop)
-	pw.SetTrackerLength(25)
-	pw.SetMessageWidth(24)
+	pw.SetMessageLength(24)
 	pw.SetNumTrackersExpected(*flagNumTrackers)
-	pw.SetSortBy(progress.SortByPercentDsc)
+	pw.SetSortBy(getSortBy())
 	pw.SetStyle(progress.StyleDefault)
+	pw.SetTrackerLength(25)
 	pw.SetTrackerPosition(progress.PositionRight)
 	pw.SetUpdateFrequency(time.Millisecond * 100)
 	pw.Style().Colors = progress.StyleColorsExample
@@ -130,6 +218,12 @@ func main() {
 	pw.Style().Visibility.TrackerOverall = !*flagHideOverallTracker
 	pw.Style().Visibility.Value = !*flagHideValue
 	pw.Style().Visibility.Pinned = *flagShowPinned
+
+	// set up custom render functions if flag is enabled
+	if *flagCustomRenderer {
+		pw.Style().Renderer.TrackerDeterminate = customTrackerDeterminateRenderer
+		pw.Style().Renderer.TrackerIndeterminate = customTrackerIndeterminateRenderer
+	}
 
 	// call Render() in async mode; yes we don't have any trackers at the moment
 	go pw.Render()

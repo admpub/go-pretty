@@ -5,6 +5,8 @@ import (
 	"io"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/admpub/go-pretty/v6/text"
 )
 
 const (
@@ -19,7 +21,7 @@ type listItem struct {
 	Text  string
 }
 
-// List helps print a 2-dimensional array in a human readable pretty-List.
+// List helps print a 2-dimensional array in a human-readable pretty-List.
 type List struct {
 	// approxSize stores the approximate output length/size
 	approxSize int
@@ -71,7 +73,7 @@ func (l *List) Reset() {
 	l.style = nil
 }
 
-// SetHTMLCSSClass sets the the HTML CSS Class to use on the <ul> node
+// SetHTMLCSSClass sets the HTML CSS Class to use on the <ul> node
 // when rendering the List in HTML format. Recursive lists would use a numbered
 // index suffix. For ex., if the cssClass is set as "foo"; the <ul> for level 0
 // would have the class set as "foo"; the <ul> for level 1 would have "foo-1".
@@ -101,12 +103,8 @@ func (l *List) Style() *Style {
 
 func (l *List) analyzeAndStringify(item interface{}) *listItem {
 	itemStr := fmt.Sprint(item)
-	if strings.Contains(itemStr, "\t") {
-		itemStr = strings.Replace(itemStr, "\t", "    ", -1)
-	}
-	if strings.Contains(itemStr, "\r") {
-		itemStr = strings.Replace(itemStr, "\r", "", -1)
-	}
+	itemStr = strings.ReplaceAll(itemStr, "\t", "    ")
+	itemStr = text.ProcessCRLF(itemStr)
 	return &listItem{
 		Level: l.level,
 		Text:  itemStr,
@@ -162,8 +160,8 @@ func (l *List) hasMoreItemsInLevel(levelIdx int, fromItemIdx int) bool {
 func (l *List) render(out *strings.Builder) string {
 	outStr := out.String()
 	if l.outputMirror != nil && len(outStr) > 0 {
-		l.outputMirror.Write([]byte(outStr))
-		l.outputMirror.Write([]byte("\n"))
+		_, _ = l.outputMirror.Write([]byte(outStr))
+		_, _ = l.outputMirror.Write([]byte("\n"))
 	}
 	return outStr
 }

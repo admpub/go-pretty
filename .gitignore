@@ -1,5 +1,8 @@
 /.idea/
+/.vscode/
 /demo*
 /profile/
+coverage.*
 .coverprofile
+*.pprof
 *.swp

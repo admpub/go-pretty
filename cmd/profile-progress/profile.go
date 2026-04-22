@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"strconv"
 	"time"
@@ -36,7 +36,7 @@ func profileRender(profiler func(profile2 *profile.Profile), n int) {
 	for i := 0; i < n; i++ {
 		pw := progress.NewWriter()
 		pw.SetAutoStop(true)
-		pw.SetOutputWriter(ioutil.Discard)
+		pw.SetOutputWriter(io.Discard)
 		go trackSomething(pw, &tracker1)
 		go trackSomething(pw, &tracker2)
 		go trackSomething(pw, &tracker3)
@@ -49,9 +49,9 @@ func main() {
 	numRenders := 5
 	if len(os.Args) > 1 {
 		var err error
-		numRenders, err = strconv.Atoi(os.Args[2])
+		numRenders, err = strconv.Atoi(os.Args[1])
 		if err != nil {
-			fmt.Printf("Invalid Argument: '%s'\n", os.Args[2])
+			fmt.Printf("Invalid Argument: '%s'\n", os.Args[1])
 			os.Exit(1)
 		}
 	}

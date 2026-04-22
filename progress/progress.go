@@ -1,14 +1,15 @@
 package progress
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"sync"
 	"time"
-	"unicode/utf8"
 
 	"github.com/admpub/go-pretty/v6/text"
+	"golang.org/x/term"
 )
 
 var (
@@ -22,33 +23,39 @@ var (
 
 // Progress helps track progress for one or more tasks.
 type Progress struct {
-	autoStop              bool
-	done                  chan bool
-	lengthProgress        int
-	lengthProgressOverall int
-	lengthTracker         int
-	logsToRender          []string
-	logsToRenderMutex     sync.RWMutex
-	messageWidth          int
-	numTrackersExpected   int64
-	outputWriter          io.Writer
-	overallTracker        *Tracker
-	overallTrackerMutex   sync.RWMutex
-	pinnedMessages        []string
-	pinnedMessageMutex    sync.RWMutex
-	pinnedMessageNumLines int
-	renderInProgress      bool
-	renderInProgressMutex sync.RWMutex
-	sortBy                SortBy
-	style                 *Style
-	trackerPosition       Position
-	trackersActive        []*Tracker
-	trackersActiveMutex   sync.RWMutex
-	trackersDone          []*Tracker
-	trackersDoneMutex     sync.RWMutex
-	trackersInQueue       []*Tracker
-	trackersInQueueMutex  sync.RWMutex
-	updateFrequency       time.Duration
+	autoStop                 bool
+	lengthMessage            int
+	lengthProgress           int
+	lengthProgressOverall    int
+	lengthTracker            int
+	logsToRender             []string
+	logsToRenderMutex        sync.RWMutex
+	numTrackersExpected      int64
+	outputWriter             io.Writer
+	outputWriterMutex        sync.RWMutex
+	overallTracker           *Tracker
+	overallTrackerMutex      sync.RWMutex
+	pinnedMessages           []string
+	pinnedMessageMutex       sync.RWMutex
+	pinnedMessageNumLines    int
+	renderContext            context.Context
+	renderContextCancel      context.CancelFunc
+	renderContextCancelMutex sync.Mutex
+	renderInProgress         bool
+	renderInProgressMutex    sync.RWMutex
+	sortBy                   SortBy
+	style                    *Style
+	terminalWidth            int
+	terminalWidthMutex       sync.RWMutex
+	terminalWidthOverride    int
+	trackerPosition          Position
+	trackersActive           []*Tracker
+	trackersActiveMutex      sync.RWMutex
+	trackersDone             []*Tracker
+	trackersDoneMutex        sync.RWMutex
+	trackersInQueue          []*Tracker
+	trackersInQueueMutex     sync.RWMutex
+	updateFrequency          time.Duration
 }
 
 // Position defines the position of the Tracker with respect to the Tracker's
@@ -67,7 +74,9 @@ const (
 // to a queue, which gets picked up by the Render logic in the next rendering
 // cycle.
 func (p *Progress) AppendTracker(t *Tracker) {
-	t.start()
+	if !t.DeferStart {
+		t.start()
+	}
 	p.overallTrackerMutex.Lock()
 	defer p.overallTrackerMutex.Unlock()
 
@@ -166,11 +175,19 @@ func (p *Progress) SetAutoStop(autoStop bool) {
 	p.autoStop = autoStop
 }
 
-// SetMessageWidth sets the (printed) length of the tracker message. Any message
-// longer the specified width will be snipped abruptly. Any message shorter than
+// SetMessageLength sets the (printed) length of the tracker message. Any
+// message longer the specified length will be snipped. Any message shorter than
 // the specified width will be padded with spaces.
+func (p *Progress) SetMessageLength(length int) {
+	p.lengthMessage = length
+}
+
+// SetMessageWidth sets the (printed) length of the tracker message. Any message
+// longer the specified width will be snipped. Any message shorter than the
+// specified width will be padded with spaces.
+// Deprecated: in favor of SetMessageLength(length)
 func (p *Progress) SetMessageWidth(width int) {
-	p.messageWidth = width
+	p.lengthMessage = width
 }
 
 // SetNumTrackersExpected sets the expected number of trackers to be tracked.
@@ -183,7 +200,9 @@ func (p *Progress) SetNumTrackersExpected(numTrackers int) {
 // os.Stdout or os.Stderr or a file. Warning: redirecting the output to a file
 // may not work well as the Render() logic moves the cursor around a lot.
 func (p *Progress) SetOutputWriter(writer io.Writer) {
+	p.outputWriterMutex.Lock()
 	p.outputWriter = writer
+	p.outputWriterMutex.Unlock()
 }
 
 // SetPinnedMessages sets message(s) pinned above all the trackers of the
@@ -197,7 +216,7 @@ func (p *Progress) SetPinnedMessages(messages ...string) {
 }
 
 // SetSortBy defines the sorting mechanism to use to sort the Active Trackers
-// before rendering the. Default: no-sorting == sort-by-insertion-order.
+// before rendering. Default: no-sorting == sort-by-insertion-order.
 func (p *Progress) SetSortBy(sortBy SortBy) {
 	p.sortBy = sortBy
 }
@@ -205,6 +224,12 @@ func (p *Progress) SetSortBy(sortBy SortBy) {
 // SetStyle sets the Style to use for rendering.
 func (p *Progress) SetStyle(style Style) {
 	p.style = &style
+}
+
+// SetTerminalWidth sets up a sticky terminal width and prevents the Progress
+// Writer from polling for the real width during render.
+func (p *Progress) SetTerminalWidth(width int) {
+	p.terminalWidthOverride = width
 }
 
 // SetTrackerLength sets the text-length of all the Trackers.
@@ -219,7 +244,7 @@ func (p *Progress) SetTrackerPosition(position Position) {
 }
 
 // SetUpdateFrequency sets the update frequency while rendering the trackers.
-// the lower the value, the more number of times the Trackers get refreshed. A
+// the lower the value, the more frequently the Trackers get refreshed. A
 // sane value would be 250ms.
 func (p *Progress) SetUpdateFrequency(frequency time.Duration) {
 	p.updateFrequency = frequency
@@ -263,8 +288,11 @@ func (p *Progress) ShowValue(show bool) {
 
 // Stop stops the Render() logic that is in progress.
 func (p *Progress) Stop() {
-	if p.IsRenderInProgress() {
-		p.done <- true
+	p.renderContextCancelMutex.Lock()
+	defer p.renderContextCancelMutex.Unlock()
+
+	if p.renderContextCancel != nil {
+		p.renderContextCancel()
 	}
 }
 
@@ -277,15 +305,27 @@ func (p *Progress) Style() *Style {
 	return p.style
 }
 
+func (p *Progress) getTerminalWidth() int {
+	p.terminalWidthMutex.RLock()
+	defer p.terminalWidthMutex.RUnlock()
+
+	if p.terminalWidthOverride > 0 {
+		return p.terminalWidthOverride
+	}
+	return p.terminalWidth
+}
+
 func (p *Progress) initForRender() {
+	// reset the signals
+	p.renderContextCancelMutex.Lock()
+	p.renderContext, p.renderContextCancel = context.WithCancel(context.Background())
+	p.renderContextCancelMutex.Unlock()
+
 	// pick a default style
 	p.Style()
 	if p.style.Options.SpeedOverallFormatter == nil {
 		p.style.Options.SpeedOverallFormatter = FormatNumber
 	}
-
-	// reset the signals
-	p.done = make(chan bool, 1)
 
 	// pick default lengths if no valid ones set
 	if p.lengthTracker <= 0 {
@@ -295,23 +335,56 @@ func (p *Progress) initForRender() {
 	// calculate length of the actual progress bar by discounting the left/right
 	// border/box chars
 	p.lengthProgress = p.lengthTracker -
-		utf8.RuneCountInString(p.style.Chars.BoxLeft) -
-		utf8.RuneCountInString(p.style.Chars.BoxRight)
-	p.lengthProgressOverall = p.messageWidth +
-		text.RuneWidthWithoutEscSequences(p.style.Options.Separator) +
+		text.StringWidthWithoutEscSequences(p.style.Chars.BoxLeft) -
+		text.StringWidthWithoutEscSequences(p.style.Chars.BoxRight)
+	p.lengthProgressOverall = p.lengthMessage +
+		text.StringWidthWithoutEscSequences(p.style.Options.Separator) +
 		p.lengthProgress + 1
 	if p.style.Visibility.Percentage {
-		p.lengthProgressOverall += text.RuneWidthWithoutEscSequences(fmt.Sprintf(p.style.Options.PercentFormat, 0.0))
+		p.lengthProgressOverall += text.StringWidthWithoutEscSequences(
+			fmt.Sprintf(p.style.Options.PercentFormat, 0.0),
+		)
 	}
 
 	// if not output write has been set, output to STDOUT
+	p.outputWriterMutex.RLock()
 	if p.outputWriter == nil {
 		p.outputWriter = os.Stdout
 	}
+	outputWriter := p.outputWriter
+	p.outputWriterMutex.RUnlock()
 
 	// pick a sane update frequency if none set
 	if p.updateFrequency <= 0 {
 		p.updateFrequency = DefaultUpdateFrequency
+	}
+
+	if outputWriter == os.Stdout {
+		// get the current terminal size for preventing roll-overs, and do this in a
+		// background loop until end of render. This only works if the output writer is STDOUT.
+		go p.watchTerminalSize() // needs p.updateFrequency
+	}
+}
+
+func (p *Progress) updateTerminalSize() {
+	p.terminalWidthMutex.Lock()
+	defer p.terminalWidthMutex.Unlock()
+
+	p.terminalWidth, _, _ = term.GetSize(int(os.Stdout.Fd()))
+}
+
+func (p *Progress) watchTerminalSize() {
+	// once
+	p.updateTerminalSize()
+	// until end of time
+	ticker := time.NewTicker(time.Second / 10)
+	for {
+		select {
+		case <-ticker.C:
+			p.updateTerminalSize()
+		case <-p.renderContext.Done():
+			return
+		}
 	}
 }
 
@@ -320,4 +393,5 @@ type renderHint struct {
 	hideTime         bool // hide the time
 	hideValue        bool // hide the value
 	isOverallTracker bool // is the Overall Progress tracker
+	terminalWidth    int  // cached terminal width for this render cycle
 }
